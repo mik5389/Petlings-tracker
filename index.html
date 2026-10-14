@@ -1,1 +1,323 @@
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Petlings Breeding Tracker - Filtered Counts</title><style>:root{font-family:system-ui,-apple-system,sans-serif;color:#503445;background:#fff5fa}*{box-sizing:border-box}body{margin:0}header{background:#d94f91;color:white;padding:22px max(18px,calc((100vw - 1050px)/2))}h1{margin:0;font-size:1.6rem}header p{margin:5px 0 0;opacity:.85}main{max-width:1050px;margin:auto;padding:18px}nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0;border-radius:9px;background:#e36aa5;color:white;padding:10px 14px}button.secondary{background:#ffe0ee;color:#983c69}button.danger{background:#ffebee;color:#ad3043}nav button{white-space:nowrap;background:#ffe7f1;color:#943f6c}nav button.active{background:#d94f91;color:white}.panel{background:white;border-radius:15px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px #2221}h2{margin:0 0 14px;font-size:1.2rem}h3{font-size:1rem}label{display:block;font-size:.85rem;font-weight:650;margin-bottom:5px}input,select,textarea{width:100%;padding:10px;border:1px solid #edc9da;border-radius:9px;background:white}textarea{min-height:90px}.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}.muted{color:#866c7b;font-size:.9rem}.pill{display:inline-block;border-radius:20px;background:#ffe8f2;color:#a33d72;padding:4px 9px;font-size:.8rem;margin:3px}.item{border-top:1px solid #f5dfeb;padding:11px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.item:first-child{border:0}.small{font-size:.85rem}section[hidden]{display:none}#toast{position:fixed;bottom:20px;left:20px;background:#63384e;color:white;padding:12px 16px;border-radius:10px;display:none;max-width:90vw}.scroll{max-height:520px;overflow:auto}.check{width:auto}summary{cursor:pointer;font-weight:600}code{white-space:pre-wrap}.results{line-height:1.65} .inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.inline input{width:95px}.notice{background:#fff5db;border-radius:9px;padding:10px;margin:12px 0} @media(max-width:520px){main{padding:10px}.panel{padding:14px}}</style></head><body><header><h1>🐾 Petlings Breeding Tracker</h1><p>Discover recipes • Track inventory • Plan breeding chains</p></header><main><nav id="tabs"><button data-tab="animals" class="active">Animals</button><button data-tab="recipes">Recipes</button><button data-tab="discover">Discover</button><button data-tab="inventory">Inventory</button><button data-tab="planner">Planner</button><button data-tab="backup">Backup</button></nav>
+<section id="animals"><div class="panel"><h2>Add an animal</h2><div class="fields"><div><label>Name</label><input id="animalName" placeholder="e.g. Bison"></div><div><label>Tier</label><select id="animalTier"></select></div></div><button onclick="addAnimal()">Add animal</button><p class="muted">Add animals you know exist, including ones you haven't unlocked. Recipes can only use animals already listed here.</p></div><div class="panel"><h2>Animal collection <span id="animalCount"></span></h2><div class="fields"><input id="animalSearch" placeholder="Search animals" oninput="renderAnimals()"><select id="animalFilter" onchange="renderAnimals()"><option value="all">All tiers</option></select></div><div id="animalList" class="scroll"></div></div></section>
+<section id="recipes" hidden><div class="panel"><h2>Add confirmed recipe</h2><div class="fields"><div><label>Result animal</label><select id="recipeResult" onchange="updateRecipeInputs()"></select></div><div id="parentInputs"></div></div><button onclick="addRecipe()">Save recipe</button><p class="muted">Parent order doesn't matter. For Tier 8 and above, the tracker currently assumes three parents from the preceding tier. Identical parents are allowed.</p></div><div class="panel"><h2>Bulk-import recipes for one animal</h2><label>Result animal</label><select id="bulkResult"></select><p class="muted">One recipe per line. Separate parent names with + (example: Cat + Bunny). For Tier 8, use three names.</p><textarea id="bulkText" placeholder="Cat + Bunny&#10;Chick + Cat"></textarea><button onclick="bulkAdd()">Import recipes</button></div><div class="panel"><h2>Known recipes <span id="recipeCount"></span></h2><div id="recipeList" class="scroll"></div></div></section>
+<section id="discover" hidden><div class="panel"><h2>Unresolved combinations</h2><p class="muted">A combination is unresolved until you've recorded a confirmed result for it. Marking one as tried without learning its result keeps it in the unresolved list but labels it tried.</p><div class="fields"><div><label>Parent tier</label><select id="discoverTier" onchange="renderDiscover()"></select></div><div><label>Show</label><select id="discoverFilter" onchange="renderDiscover()"><option value="untried">Untried only</option><option value="unresolved">All unresolved</option><option value="tried">Tried without known result</option></select></div></div><div id="discoverStats" class="muted"></div><div id="discoverList" class="scroll"></div><div id="discoverPager" class="inline"></div></div></section>
+<section id="inventory" hidden><div class="panel"><h2>My animals</h2><p class="muted">Enter how many you currently own. Inventory values are saved automatically. Planning never changes your actual inventory.</p><div id="inventoryList"></div></div><div class="panel"><h2>Available now</h2><p class="muted">Every same-tier combination your current inventory can make. Counts are for each combination individually, not all at once.</p><div class="fields"><div><label>Filter</label><select id="nowFilter" onchange="renderInventoryCombos()"><option value="all">All combinations</option><option value="unknown">Unresolved only</option><option value="known">Known recipes only</option></select></div></div><div id="nowSummary" class="muted"></div><div id="nowCombos" class="scroll"></div></div><div class="panel"><h2>Possible through breeding</h2><p class="muted">Shows combinations you could eventually make by first breeding other animals using confirmed recipes. Each possibility is calculated separately. Tap a result to see one breeding path.</p><button onclick="renderFutureCombos()">Calculate higher-tier possibilities</button><div id="futureSummary" class="muted"></div><div id="futureCombos" class="scroll"></div></div></section>
+<section id="planner" hidden><div class="panel"><h2>Breeding planner</h2><div class="fields"><div><label>Target animal</label><select id="targetAnimal"></select></div><div><label>How many?</label><input type="number" id="targetQty" min="1" max="20" value="1"></div></div><button onclick="planTarget()">Find a breeding plan</button><div id="planOutput" class="results"></div></div><div class="panel"><h2>What can I make?</h2><p class="muted">Checks each known animal individually against your current inventory, including intermediate breeding steps. Results are alternatives, not items you can all make simultaneously.</p><button onclick="findCraftable()">Calculate possibilities</button><div id="craftableOutput" class="results"></div></div></section>
+<section id="backup" hidden><div class="panel"><h2>Save and restore your data</h2><p class="muted">Your changes are saved in this browser's local storage. Export a backup regularly, especially before switching devices or clearing browser data.</p><div class="inline"><button onclick="exportData()">Download JSON backup</button><label style="cursor:pointer;background:#ffe0ee;padding:10px;border-radius:9px">Import backup <input type="file" id="importFile" accept=".json,application/json" onchange="importData(event)" style="display:none"></label></div></div><div class="panel"><h2>Danger zone</h2><button class="danger" onclick="resetData()">Erase all tracker data</button></div></section></main><div id="toast"></div>
+<script>
+const KEY='petlings-tracker-v1';let data={animals:[],recipes:[],tried:[],inventory:{}};try{let saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.animals)&&Array.isArray(saved.recipes))data={...data,...saved}}catch(e){};let page=0;const $=id=>document.getElementById(id);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const animal=id=>data.animals.find(a=>a.id===id);const name=id=>animal(id)?.name||'Unknown';const tierAnimals=t=>data.animals.filter(a=>a.tier===t).sort((a,b)=>a.name.localeCompare(b.name));const sortIds=ids=>[...ids].sort((a,b)=>name(a).localeCompare(name(b))||a.localeCompare(b));const comboKey=ids=>sortIds(ids).join('|');const knownKeys=()=>new Set(data.recipes.map(r=>comboKey(r.parents)));function save(){localStorage.setItem(KEY,JSON.stringify(data));renderAll()}function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').style.display='none',2600)}function options(arr,selected){return arr.map(a=>`<option value="${esc(a.id)}" ${a.id===selected?'selected':''}>${esc(a.name)} (T${a.tier})</option>`).join('')};function selectFill(id,arr){let e=$(id),prev=e.value;e.innerHTML=options(arr,prev)}function addAnimal(){let n=$('animalName').value.trim(),t=Number($('animalTier').value);if(!n)return toast('Enter an animal name');if(data.animals.some(a=>a.name.toLowerCase()===n.toLowerCase()))return toast('Animal already exists');data.animals.push({id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),name:n,tier:t,discovered:true});$('animalName').value='';save();toast('Animal added')};function toggleDiscovered(id){let a=animal(id);a.discovered=!a.discovered;save()};function removeAnimal(id){if(!confirm('Delete this animal and all its recipes?'))return;data.animals=data.animals.filter(a=>a.id!==id);data.recipes=data.recipes.filter(r=>r.result!==id&&!r.parents.includes(id));data.tried=data.tried.filter(k=>!k.split('|').includes(id));delete data.inventory[id];save()};function renderAnimals(){let q=$('animalSearch').value.toLowerCase(),t=$('animalFilter').value;let arr=data.animals.filter(a=>a.name.toLowerCase().includes(q)&&(t==='all'||a.tier===Number(t))).sort((a,b)=>a.tier-b.tier||a.name.localeCompare(b.name));$('animalCount').textContent=`(${arr.length})`;$('animalList').innerHTML=arr.map(a=>`<div class="item"><div><strong>${esc(a.name)}</strong> <span class="pill">Tier ${a.tier}</span><br><label class="small"><input class="check" type="checkbox" ${a.discovered?'checked':''} onchange="toggleDiscovered('${a.id}')"> Discovered</label></div><button class="danger" onclick="removeAnimal('${a.id}')">Delete</button></div>`).join('')||'<p class="muted">No animals yet. Add your first one above.</p>'}function updateRecipeInputs(){let a=animal($('recipeResult').value),n=a?.tier>=8?3:2,t=(a?.tier||2)-1,arr=tierAnimals(t);$('parentInputs').innerHTML=`<label>Parents (Tier ${t})</label>`+Array.from({length:n},(_,i)=>`<select class="parent" style="margin-bottom:6px">${options(arr)}</select>`).join('')+(arr.length===0?'<p class="muted">Add parent animals in this tier first.</p>':'')};function storeRecipe(result,parents){let a=animal(result);if(!a||a.tier<2||a.tier>10)return 'Invalid result animal';let n=a.tier>=8?3:2;if(parents.length!==n||parents.some(p=>!animal(p)||animal(p).tier!==a.tier-1))return 'Parents must all be from the tier below';let k=comboKey(parents);let existing=data.recipes.find(r=>comboKey(r.parents)===k);if(existing)return existing.result===result?'Recipe already saved':`Conflict: these parents already produce ${name(existing.result)}`;data.recipes.push({result,parents:sortIds(parents)});data.tried=data.tried.filter(x=>x!==k);return null};function addRecipe(){let e=storeRecipe($('recipeResult').value,[...document.querySelectorAll('.parent')].map(x=>x.value));if(e)return toast(e);save();toast('Recipe saved')};function bulkAdd(){let result=$('bulkResult').value,a=animal(result);if(!a)return toast('Select a result');let added=0,errors=[];$('bulkText').value.split('\n').forEach((line,i)=>{if(!line.trim())return;let parts=line.split('+').map(s=>s.trim()),ids=parts.map(s=>data.animals.find(a=>a.name.toLowerCase()===s.toLowerCase())?.id);let err=ids.some(x=>!x)?'Unknown animal name':storeRecipe(result,ids);if(err)errors.push(`Line ${i+1}: ${err}`);else added++});save();alert(`${added} recipes imported.${errors.length?'\n'+errors.join('\n'):''}`)}function removeRecipe(i){data.recipes.splice(i,1);save()};function renderRecipes(){let results=data.animals.filter(a=>a.tier>1);selectFill('recipeResult',results);selectFill('bulkResult',results);updateRecipeInputs();$('recipeCount').textContent=`(${data.recipes.length})`;$('recipeList').innerHTML=data.recipes.map((r,i)=>({r,i})).sort((a,b)=>name(a.r.result).localeCompare(name(b.r.result))).map(({r,i})=>`<div class="item"><span>${esc(r.parents.map(name).join(' + '))} → <strong>${esc(name(r.result))}</strong></span><button class="danger" onclick="removeRecipe(${i})">Remove</button></div>`).join('')||'<p class="muted">No recipes yet.</p>'};function combinations(arr,n){let out=[];function walk(start,p){if(p.length===n){out.push([...p]);return}for(let i=start;i<arr.length;i++)walk(i,[...p,arr[i]])}walk(0,[]);return out};function renderDiscover(){let t=Number($('discoverTier').value||1),arr=tierAnimals(t).map(a=>a.id),n=t>=7?3:2,keys=knownKeys(),filter=$('discoverFilter').value;let total=0,found=[];let all=combinations(arr,n);for(let p of all){let k=comboKey(p);if(keys.has(k))continue;let tried=data.tried.includes(k);if(filter==='untried'&&tried||filter==='tried'&&!tried)continue;total++;found.push({p,k,tried})}let maxPage=Math.max(0,Math.ceil(total/60)-1);page=Math.min(page,maxPage);$('discoverStats').textContent=`${total} matching combinations (${all.length} total possible combinations for ${arr.length} animals). Parent duplicates are included.`;$('discoverList').innerHTML=found.slice(page*60,page*60+60).map(({p,k,tried})=>`<div class="item"><span>${esc(p.map(name).join(' + '))} ${tried?'<span class="pill">Tried</span>':''}</span><button class="secondary" onclick="toggleTried('${k}')">${tried?'Mark untried':'Mark tried'}</button></div>`).join('')||'<p class="muted">No matching combinations.</p>';$('discoverPager').innerHTML=`<button class="secondary" ${page===0?'disabled':''} onclick="page--;renderDiscover()">Previous</button><span>Page ${page+1} of ${maxPage+1}</span><button class="secondary" ${page===maxPage?'disabled':''} onclick="page++;renderDiscover()">Next</button>`};function toggleTried(k){data.tried=data.tried.includes(k)?data.tried.filter(x=>x!==k):[...data.tried,k];save()};function renderInventory(){let arr=[...data.animals].sort((a,b)=>a.tier-b.tier||a.name.localeCompare(b.name));$('inventoryList').innerHTML=arr.map(a=>`<div class="item"><span><strong>${esc(a.name)}</strong> <span class="pill">T${a.tier}</span></span><div class="inline"><label>Owned <input type="number" min="0" max="999999" value="${Number(data.inventory[a.id]||0)}" onchange="setInventory('${a.id}',this.value)"></label></div></div>`).join('')||'<p class="muted">Add animals first.</p>'};function setInventory(id,v){data.inventory[id]=Math.max(0,Math.floor(Number(v)||0));localStorage.setItem(KEY,JSON.stringify(data));renderInventoryCombos();$("futureSummary").textContent="Inventory changed. Tap Calculate to refresh.";$("futureCombos").innerHTML=""};
+function mergeCount(parents,inv){let counts={};parents.forEach(id=>counts[id]=(counts[id]||0)+1);return Math.min(...Object.entries(counts).map(([id,n])=>Math.floor((inv[id]||0)/n)))}
+function comboStatus(parents){let k=comboKey(parents),r=data.recipes.find(r=>comboKey(r.parents)===k);return r?`Known: ${esc(name(r.result))}`:data.tried.includes(k)?'Tried, result unknown':'Untried / unknown'}
+function renderInventoryCombos(){let f=$('nowFilter').value,known=knownKeys(),rows=[];for(let t=1;t<=9;t++){let owned=tierAnimals(t).filter(a=>(data.inventory[a.id]||0)>0).map(a=>a.id);for(let parents of combinations(owned,t>=7?3:2)){let count=mergeCount(parents,data.inventory);if(!count)continue;let isKnown=known.has(comboKey(parents));if(f==='known'&&!isKnown||f==='unknown'&&isKnown)continue;rows.push({parents,count,t})}}$('nowSummary').textContent=`${rows.length} available combinations`;$('nowCombos').innerHTML=rows.slice(0,500).map(x=>`<div class="item"><div><strong>${esc(x.parents.map(name).join(' + '))}</strong> <span class="pill">T${x.t} → T${x.t+1}</span><br><span class="muted">${comboStatus(x.parents)}</span></div><span class="pill">${x.count}×</span></div>`).join('')+(rows.length>500?'<p class="muted">Showing first 500. Filter to narrow results.</p>':'')||'<p class="muted">No combinations available. Enter inventory quantities above.</p>'}
+// Find a path to obtain each parent, consuming resources within that single hypothetical plan.
+function craftParents(parents){let state={inv:{...data.inventory},steps:[],cost:0};for(let id of parents){let got=craft(id,state.inv);if(!got)return null;state.inv=got.inv;state.steps.push(...got.steps);state.cost+=got.cost}return state}
+let futurePlans=[];
+function renderFutureCombos(){let rows=[],seen=knownKeys(),checked=0;for(let t=1;t<=9;t++){let arr=tierAnimals(t).map(a=>a.id);for(let parents of combinations(arr,t>=7?3:2)){checked++;if(checked>25000)break;if(mergeCount(parents,data.inventory)>0)continue;let plan=craftParents(parents);if(!plan)continue;rows.push({parents,t,plan})}if(checked>25000)break}rows.sort((a,b)=>a.t-b.t||a.plan.cost-b.plan.cost);futurePlans=rows.slice(0,500);$('futureSummary').textContent=`${rows.length} additional combinations reachable through known recipes${checked>25000?' (search limited to first 25,000 combinations)':''}. Results are alternative plans.`;$('futureCombos').innerHTML=futurePlans.map((x,i)=>`<div class="item"><div><strong>${esc(x.parents.map(name).join(' + '))}</strong> <span class="pill">T${x.t} → T${x.t+1}</span><br><span class="muted">${comboStatus(x.parents)} · ${x.plan.cost} preparation merges</span></div><button class="secondary" onclick="showFuturePlan(${i})">Steps</button></div>`).join('')+(rows.length>500?'<p class="muted">Showing first 500 combinations.</p>':'')||'<p class="muted">No additional combinations found from your inventory and confirmed recipes.</p>'}
+function showFuturePlan(i){let x=futurePlans[i];if(!x)return;alert(`Prepare ${x.parents.map(name).join(' + ')}:\n\n${x.plan.steps.length?x.plan.steps.map((s,j)=>(j+1)+'. '+s).join('\n'):'You already own the required animals.'}\n\nThen combine: ${x.parents.map(name).join(' + ')}\n${comboStatus(x.parents)}\n\nThis does not change your saved inventory.`)}
+// Search exact crafting chains. Each branch uses a fresh copy of remaining inventory.
+function craft(target,inv,depth=0,seen=new Set(),budget={calls:0}){if(++budget.calls>120000)return null;if((inv[target]||0)>0){let next={...inv,[target]:inv[target]-1};return {inv:next,steps:[],cost:0}}let a=animal(target);if(!a||a.tier===1||depth>22||seen.has(target))return null;let recipes=data.recipes.filter(r=>r.result===target);let best=null;for(let r of recipes){let state={inv:{...inv},steps:[],cost:0},ok=true;for(let p of r.parents){let got=craft(p,state.inv,depth+1,new Set([...seen,target]),budget);if(!got){ok=false;break}state.inv=got.inv;state.steps.push(...got.steps);state.cost+=got.cost}if(ok){state.steps.push(`${r.parents.map(name).join(' + ')} → ${name(target)}`);state.cost++;if(!best||state.cost<best.cost)best=state}}return best}
+function makePlan(id,qty){let state={inv:{...data.inventory},steps:[],cost:0};for(let i=0;i<qty;i++){let got=craft(id,state.inv);if(!got)return null;state.inv=got.inv;state.steps.push(...got.steps);state.cost+=got.cost}return state};function planTarget(){let id=$('targetAnimal').value,qty=Math.min(20,Math.max(1,Number($('targetQty').value)||1)),r=makePlan(id,qty);$('planOutput').innerHTML=r?`<h3>Plan for ${qty} × ${esc(name(id))}</h3><p>${r.cost} merges needed.</p>${r.steps.length?'<ol>'+r.steps.map(s=>`<li>${esc(s)}</li>`).join('')+'</ol>':'<p>You already own enough!</p>'}<p class="muted">These steps describe one possible plan. No inventory was changed.</p>`:'<div class="notice">No confirmed breeding plan found with your current inventory. You may need more starting animals or additional recipes.</div>'};function findCraftable(){let out=[];for(let a of data.animals.filter(a=>a.tier>1)){let r=makePlan(a.id,1);if(r)out.push({a,cost:r.cost})}out.sort((x,y)=>x.a.tier-y.a.tier||x.cost-y.cost);$('craftableOutput').innerHTML=out.length?out.map(x=>`<div class="item"><span><strong>${esc(x.a.name)}</strong> <span class="pill">Tier ${x.a.tier}</span></span><span>${x.cost} merges</span></div>`).join(''):'<p class="muted">Nothing is currently craftable using the known recipes and inventory.</p>'};function exportData(){let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='petlings-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)}function importData(e){let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.animals)||!Array.isArray(x.recipes)||!Array.isArray(x.tried)||typeof x.inventory!=='object'||!x.inventory)throw Error('Invalid backup');if(!confirm('Replace all current data with this backup?'))return;data=x;save();toast('Backup restored')}catch(err){alert('Could not import: '+err.message)}};reader.readAsText(f);e.target.value=''}function resetData(){if(confirm('Permanently erase all animals, recipes and inventory saved in this browser?')){data={animals:[],recipes:[],tried:[],inventory:{}};save()}}function renderAll(){let t=$('animalFilter').value,dt=$('discoverTier').value; $('animalFilter').innerHTML='<option value="all">All tiers</option>'+Array.from({length:10},(_,i)=>`<option value="${i+1}">Tier ${i+1}</option>`).join('');$('animalFilter').value=t||'all';$('discoverTier').innerHTML=Array.from({length:9},(_,i)=>`<option value="${i+1}">Tier ${i+1} → Tier ${i+2}</option>`).join('');$('discoverTier').value=dt||'1';renderAnimals();renderRecipes();renderDiscover();renderInventory();renderInventoryCombos();selectFill('targetAnimal',data.animals)}document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('main section').forEach(s=>s.hidden=s.id!==b.dataset.tab);renderAll()});$('animalTier').innerHTML=Array.from({length:10},(_,i)=>`<option value="${i+1}">Tier ${i+1}</option>`).join('');renderAll();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// Public recipes, local personal inventory. Only authenticated admins may write.
+const api=window.supabase?.createClient('https://cgsqwrptzxtvjdhogtzk.supabase.co','sb_publishable_k92vjnQMPWHgMsNr_6k5jw_-Jff4m8X');
+let isAdmin=false,remoteReady=false;
+const personalKey='petlings-personal-v2';
+const banner=document.createElement('div');banner.className='panel';banner.id='sharedStatus';banner.textContent='Connecting to shared encyclopedia…';document.querySelector('main').insertBefore(banner,document.querySelector('main nav'));
+const adminArea=document.createElement('div');adminArea.className='panel';adminArea.innerHTML='<strong>Shared encyclopedia</strong><p id="accountStatus" class="muted">Checking your account…</p><button id="signIn" class="secondary">Sign in with GitHub</button> <button id="signOut" class="secondary" hidden>Sign out</button> <button id="refreshShared" class="secondary">Refresh shared recipes</button>';
+document.querySelector('main').insertBefore(adminArea,document.querySelector('main nav'));
+function personalSave(){localStorage.setItem(personalKey,JSON.stringify({inventory:data.inventory,tried:data.tried,discovered:Object.fromEntries(data.animals.map(a=>[a.id,a.discovered]))}));}
+// Existing local data remains available as a backup; shared data is authoritative.
+const oldSave=save;
+save=function(){personalSave();renderAll()};
+function mustAdmin(){if(!remoteReady){toast('Still connecting to the database');return false}if(!isAdmin){toast('Only the administrator can change shared animals and recipes. Sign in above.');return false}return true}
+function dbId(id){return Number(String(id).slice(1))}
+function idOf(n){return 'a'+n}
+async function query(table,method,body,filter){
+  if(method==='select'){
+    // Supabase/PostgREST limits rows per request (often 1000).
+    // Fetch every page so recipe counts, discovery status and planners stay accurate.
+    const pageSize=500,all=[];
+    for(let start=0;start<1000000;start+=pageSize){
+      const {data:rows,error}=await api.from(table).select('*').order('id',{ascending:true}).range(start,start+pageSize-1);
+      if(error)throw error;
+      all.push(...(rows||[]));
+      if(!rows||rows.length<pageSize)return all;
+    }
+    throw new Error('Too many records to load safely; please contact the site administrator.');
+  }
+  let q=api.from(table);
+  if(method==='insert')q=q.insert(body).select();
+  else if(method==='delete')q=q.delete().eq('id',filter);
+  else throw new Error('Unsupported database operation');
+  const {data:rows,error}=await q;
+  if(error)throw error;
+  return rows;
+}
+async function loadShared(){if(!api){banner.textContent='Could not load database library. Check your internet connection.';return}banner.textContent='Loading shared animals and recipes…';try{
+const [animals,recipes]=await Promise.all([query('animals','select'),query('recipes','select')]);
+const savedPersonal=JSON.parse(localStorage.getItem(personalKey)||'null');
+const oldAnimals=data.animals,oldInventory=data.inventory,oldTried=data.tried;
+const mapOld=new Map(oldAnimals.map(a=>[a.name.toLowerCase()+'|'+a.tier,a]));
+const newAnimals=animals.map(a=>{const old=mapOld.get(a.name.toLowerCase()+'|'+a.tier);return {id:idOf(a.id),name:a.name,tier:a.tier,discovered:savedPersonal?.discovered?.[idOf(a.id)]??old?.discovered??false}});
+const remap={};for(let a of newAnimals){let old=mapOld.get(a.name.toLowerCase()+'|'+a.tier);if(old)remap[old.id]=a.id}
+const inventory={};for(let a of newAnimals)inventory[a.id]=savedPersonal?.inventory?.[a.id]??oldInventory[a.id]??Object.entries(remap).filter(([,v])=>v===a.id).reduce((sum,[k])=>sum+(oldInventory[k]||0),0);
+const tried=(savedPersonal?.tried||oldTried||[]).map(k=>k.split('|').map(id=>remap[id]||id).sort().join('|'));
+data={animals:newAnimals,recipes:recipes.map(r=>({dbid:r.id,result:idOf(r.result_id),parents:r.parent_ids.map(idOf)})),inventory,tried};remoteReady=true;personalSave();renderAll();banner.textContent=`🩷 Shared encyclopedia connected: ${animals.length} animals and ${recipes.length} recipes. Your inventory stays on this device.`;
+}catch(e){remoteReady=false;banner.textContent='Could not load shared database: '+e.message}}
+async function refreshAuth(){if(!api)return;try{const {data:session}=await api.auth.getUser();const user=session?.user;isAdmin=false;if(user){const {data:allowed,error}=await api.rpc('is_petlings_admin');if(error)throw error;isAdmin=allowed===true}$('accountStatus').textContent=isAdmin?'Signed in as administrator — you can edit shared recipes.':user?'Signed in, but this account is read-only.':'Visitors can view recipes. Sign in to edit as administrator.';$('signIn').hidden=!!user;$('signOut').hidden=!user;renderAll()}catch(e){$('accountStatus').textContent='Account check failed: '+e.message}}
+$('signIn').onclick=async()=>{const {error}=await api.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});if(error)toast(error.message)};
+$('signOut').onclick=async()=>{await api.auth.signOut();await refreshAuth()};
+$('refreshShared').onclick=loadShared;
+addAnimal=async function(){if(!mustAdmin())return;let n=$('animalName').value.trim(),t=Number($('animalTier').value);if(!n)return toast('Enter an animal name');if(data.animals.some(a=>a.name.toLowerCase()===n.toLowerCase()))return toast('Animal already exists');try{await query('animals','insert',{name:n,tier:t});$('animalName').value='';await loadShared();$('animalName').focus();toast('Shared animal saved!')}catch(e){toast('Save failed: '+e.message)}};
+removeAnimal=async function(id){if(!mustAdmin())return;if(!confirm('Delete this shared animal? It may fail if recipes still use it.'))return;try{await query('animals','delete',null,dbId(id));await loadShared()}catch(e){toast('Delete failed: '+e.message)}};
+addRecipe=async function(){if(!mustAdmin())return;const result=$('recipeResult').value,parents=[...document.querySelectorAll('.parent')].map(x=>x.value);const err=validateRemoteRecipe(result,parents);if(err)return toast(err);try{await query('recipes','insert',{result_id:dbId(result),parent_ids:sortIds(parents).map(dbId)});await loadShared();toast('Shared recipe saved!')}catch(e){toast('Save failed: '+e.message)}};
+function validateRemoteRecipe(result,parents){let a=animal(result);if(!a||a.tier<2)return 'Choose a result animal';if(parents.length!==(a.tier>=8?3:2)||parents.some(p=>animal(p)?.tier!==a.tier-1))return 'Select parents from the tier below';let existing=data.recipes.find(r=>comboKey(r.parents)===comboKey(parents));if(existing)return 'Already known: '+name(existing.result);return null}
+bulkAdd=async function(){if(!mustAdmin())return;const result=$('bulkResult').value,lines=$('bulkText').value.split('\n').filter(x=>x.trim());const rows=[],errors=[];for(let i=0;i<lines.length;i++){let parts=lines[i].split('+').map(x=>x.trim());let parents=parts.map(n=>data.animals.find(a=>a.name.toLowerCase()===n.toLowerCase())?.id);let err=validateRemoteRecipe(result,parents);if(err)errors.push(`Line ${i+1}: ${err}`);else rows.push({result_id:dbId(result),parent_ids:sortIds(parents).map(dbId)})}if(errors.length){alert(errors.join('\n'));return}if(!rows.length)return toast('Enter recipes first');try{await query('recipes','insert',rows);$('bulkText').value='';await loadShared();toast(rows.length+' shared recipes saved!')}catch(e){toast('Import failed: '+e.message)}};
+removeRecipe=async function(i){if(!mustAdmin())return;let r=data.recipes[i];if(!r||!confirm('Remove this recipe from the shared encyclopedia?'))return;try{await query('recipes','delete',null,r.dbid);await loadShared()}catch(e){toast('Delete failed: '+e.message)}};
+// Submit a new animal with Enter while the name field is focused.
+// Reuse the existing admin-checked, Supabase-backed addAnimal handler.
+$('animalName').addEventListener('keydown',function(event){
+  if(event.key==='Enter' && !event.isComposing){
+    event.preventDefault();
+    if(!this.dataset.submitting){
+      this.dataset.submitting='1';
+      Promise.resolve(addAnimal()).finally(()=>{delete this.dataset.submitting});
+    }
+  }
+});
+const originalRenderAnimals=renderAnimals;renderAnimals=function(){originalRenderAnimals();if(!isAdmin)$('animalList').querySelectorAll('button.danger').forEach(b=>b.remove())};
+const originalRenderRecipes=renderRecipes;renderRecipes=function(){originalRenderRecipes();if(!isAdmin)$('recipeList').querySelectorAll('button.danger').forEach(b=>b.remove())};
+// Personal discovery toggles are never written to the shared database.
+const originalSetInventory=setInventory;setInventory=function(id,v){originalSetInventory(id,v);personalSave()};
+const originalToggle=toggleDiscovered;toggleDiscovered=function(id){originalToggle(id)};
+// Never allow a local backup to overwrite shared records.
+importData=function(){alert('Shared animals and recipes are managed online. Personal inventory stays on this device. Backup import from the older tracker is not supported in this version.')};
+resetData=function(){if(confirm('Erase only your personal inventory and tried combinations on this device?')){data.inventory={};data.tried=[];data.animals.forEach(a=>a.discovered=false);personalSave();renderAll()}};
+exportData=function(){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='petlings-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
+// Disable editing UI for visitors; discovery and inventory remain editable.
+const originalRenderAll=renderAll;renderAll=function(){originalRenderAll();document.querySelectorAll('#animals > .panel:first-child input,#animals > .panel:first-child select,#animals > .panel:first-child button,#recipes > .panel:nth-child(-n+2) input,#recipes > .panel:nth-child(-n+2) select,#recipes > .panel:nth-child(-n+2) textarea,#recipes > .panel:nth-child(-n+2) button').forEach(el=>{el.disabled=!isAdmin});};
+$('backup').querySelector('.muted').textContent='Download a copy of your personal inventory and the current shared encyclopedia. Shared recipes cannot be restored from a local backup.';
+$('backup').querySelector('label[style]').style.display='none';
+$('backup').querySelector('.danger').textContent='Erase my personal inventory and progress';
+refreshAuth().then(loadShared);
+</script>
+<script>
+// Keyboard-accessible searchable selectors for recipes.
+(function(){
+  const enhanced = new WeakMap();
+  function enhance(select){
+    if(!select || enhanced.has(select)) return;
+    const wrap=document.createElement('div');wrap.className='recipe-search-box';
+    const input=document.createElement('input');input.type='text';input.autocomplete='off';input.placeholder='Type an animal name...';
+    input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');
+    input.setAttribute('aria-expanded','false');
+    const menu=document.createElement('div');menu.className='recipe-search-menu';menu.hidden=true;
+    let results=[],active=-1;
+    const current=()=>select.selectedOptions[0]?.textContent||'';
+    function close(restore=false){menu.hidden=true;input.setAttribute('aria-expanded','false');active=-1;if(restore)input.value=current();}
+    function paint(){Array.from(menu.children).forEach((node,i)=>{node.classList.toggle('keyboard-active',i===active);node.setAttribute('aria-selected',String(i===active));});if(active>=0)menu.children[active]?.scrollIntoView({block:'nearest'});}
+    function show(){const q=input.value.trim().toLowerCase();results=Array.from(select.options).filter(o=>o.value&&o.textContent.toLowerCase().includes(q)).slice(0,60);menu.replaceChildren();active=-1;results.forEach((o,i)=>{const item=document.createElement('button');item.type='button';item.className='recipe-search-option';item.textContent=o.textContent;item.setAttribute('role','option');item.addEventListener('pointerdown',e=>e.preventDefault());item.addEventListener('click',()=>choose(i));menu.append(item)});menu.hidden=!results.length;input.setAttribute('aria-expanded',String(!menu.hidden));}
+    function choose(i){const o=results[i];if(!o)return;select.value=o.value;input.value=o.textContent;close();select.dispatchEvent(new Event('change',{bubbles:true}));input.focus();}
+    input.value=current();
+    input.addEventListener('focus',()=>{input.select();show()});
+    input.addEventListener('input',show);
+    input.addEventListener('blur',()=>setTimeout(()=>close(true),180));
+    // Capture phase prevents other page-level Enter shortcuts from swallowing selection.
+    input.addEventListener('keydown',e=>{
+      if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))return;
+      e.preventDefault();e.stopPropagation();
+      if(e.key==='Escape'){close(true);return;}
+      if(menu.hidden)show();
+      if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+        if(!results.length)return;
+        active=e.key==='ArrowDown'?(active+1)%results.length:(active<0?results.length-1:(active-1+results.length)%results.length);
+        paint();return;
+      }
+      if(e.key==='Enter'&&results.length)choose(active<0?0:active);
+    },true);
+    select.before(wrap);wrap.append(input,menu,select);select.classList.add('recipe-original-select');
+    enhanced.set(select,{input,close});
+  }
+  function sync(){
+    ['recipeResult','bulkResult'].forEach(id=>enhance(document.getElementById(id)));
+    document.querySelectorAll('#parentInputs select').forEach(enhance);
+    document.querySelectorAll('#recipes .recipe-search-box').forEach(w=>{
+      const select=w.querySelector('select'),input=w.querySelector('input');
+      input.disabled=select.disabled;
+      if(document.activeElement!==input)input.value=select.selectedOptions[0]?.textContent||'';
+    });
+  }
+  const previousRender=renderAll;
+  renderAll=function(){previousRender();sync()};
+  const previousParents=updateRecipeInputs;
+  updateRecipeInputs=function(){previousParents();sync()};
+  sync();
+})();
+</script>
+<style>
+.recipe-search-box{position:relative;min-width:0}.recipe-original-select{display:none!important}.recipe-search-menu{position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border:1px solid #edc9da;border-radius:10px;box-shadow:0 8px 20px #50344530;max-height:240px;overflow:auto}.recipe-search-menu[hidden]{display:none}.recipe-search-option{display:block;width:100%;text-align:left;background:#fff;color:#503445;border-radius:0;padding:10px 12px;border-bottom:1px solid #f5dfeb}.recipe-search-option:hover,.recipe-search-option:focus,.recipe-search-option.keyboard-active{background:#ffe0ee}
+</style>
+<style>
+#bulkPreview{margin-top:14px}.bulk-row{padding:10px;border-bottom:1px solid #f5dfeb}.bulk-row.error{background:#fff1f2}.bulk-row.warn{background:#fff9e9}.bulk-row.ok{background:#f2fff7}.bulk-row strong{display:block}.bulk-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}#bulkPreview button{font-size:.9rem}
+</style>
+<script>
+// Preview first; never write unverified bulk recipes to the shared database.
+(function(){
+const textarea=document.getElementById('bulkText');
+const importButton=textarea.nextElementSibling;
+importButton.textContent='Preview recipes';
+const preview=document.createElement('div');preview.id='bulkPreview';preview.setAttribute('aria-live','polite');
+importButton.after(preview);
+let snapshot=null;
+const normalize=s=>s.trim().toLocaleLowerCase();
+function distance(a,b){a=normalize(a);b=normalize(b);let prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=next;}return prev[b.length];}
+function suggest(raw,tier){return data.animals.filter(a=>a.tier===tier).map(a=>({name:a.name,score:distance(raw,a.name)})).sort((a,b)=>a.score-b.score).filter(x=>x.score<=Math.max(2,Math.floor(raw.length/3))).slice(0,3).map(x=>x.name);}
+function analyze(){
+const result=document.getElementById('bulkResult').value;
+const target=animal(result),expected=target?.tier>=8?3:2;
+const lines=textarea.value.split(/\r?\n/);
+const existing=new Map(data.recipes.map(r=>[comboKey(r.parents),name(r.result)]));
+const seen=new Set();
+const items=[];
+lines.forEach((line,i)=>{
+if(!line.trim())return;
+const parts=line.split('+').map(x=>x.trim());
+const errors=[];const notes=[];
+if(!target||!target.tier||target.tier<2)errors.push('Select a Tier 2–10 result animal.');
+if(parts.length!==expected)errors.push(`Expected ${expected} parents; found ${parts.length}.`);
+const parents=parts.map(raw=>{
+if(!raw){errors.push('Empty parent name.');return null;}
+const match=data.animals.find(a=>normalize(a.name)===normalize(raw));
+if(!match){const matches=suggest(raw,(target?.tier||2)-1);errors.push(`Unknown animal “${raw}”${matches.length?'. Did you mean '+matches.join(', ')+'?':''}`);return null;}
+if(target&&match.tier!==target.tier-1)errors.push(`${match.name} is Tier ${match.tier}; expected Tier ${target.tier-1}.`);
+return match.id;
+});
+let key=null;
+if(!errors.length){key=comboKey(parents);if(existing.has(key))notes.push(`Already saved (result: ${existing.get(key)}).`);else if(seen.has(key))notes.push('Duplicate within this import.');else seen.add(key);}
+items.push({number:i+1,line,parents,key,errors,notes,status:errors.length?'error':notes.length?'warn':'ok'});
+});
+return {result,raw:textarea.value,items,valid:items.filter(x=>x.status==='ok'),invalid:items.filter(x=>x.status==='error'),skipped:items.filter(x=>x.status==='warn')};
+}
+function renderPreview(){snapshot=analyze();const x=snapshot;preview.replaceChildren();
+const title=document.createElement('p');title.className='muted';title.textContent=`${x.valid.length} ready to import · ${x.invalid.length} need correction · ${x.skipped.length} duplicates/already saved`;
+preview.append(title);
+for(const item of x.items){const row=document.createElement('div');row.className='bulk-row '+item.status;const head=document.createElement('strong');head.textContent=`Line ${item.number}: ${item.status==='ok'?'Ready':item.status==='warn'?'Skip':'Fix needed'}`;const content=document.createElement('div');content.textContent=item.line;row.append(head,content);for(const message of [...item.errors,...item.notes]){const note=document.createElement('div');note.className='small';note.textContent=message;row.append(note);}preview.append(row);}
+if(!x.items.length){const note=document.createElement('p');note.className='muted';note.textContent='Paste one or more parent combinations to preview them.';preview.append(note);return;}
+if(x.valid.length){const actions=document.createElement('div');actions.className='bulk-actions';const btn=document.createElement('button');btn.textContent=`Import ${x.valid.length} valid recipe${x.valid.length===1?'':'s'}`;btn.onclick=async()=>{
+if(!mustAdmin())return;
+if(!snapshot||textarea.value!==snapshot.raw||document.getElementById('bulkResult').value!==snapshot.result){renderPreview();toast('Recipes changed. Review the updated preview.');return;}
+const fresh=analyze();if(fresh.valid.length!==snapshot.valid.length){renderPreview();toast('Database changed. Review again.');return;}
+btn.disabled=true;btn.textContent='Saving…';
+try{const rows=fresh.valid.map(item=>({result_id:dbId(fresh.result),parent_ids:sortIds(item.parents).map(dbId)}));await query('recipes','insert',rows);const remaining=fresh.items.filter(item=>item.status==='error').map(item=>item.line);textarea.value=remaining.join('\n');await loadShared();renderPreview();toast(rows.length+' shared recipes saved!'+(remaining.length?' Correct the remaining lines.':''));}
+catch(e){toast('Import failed: '+e.message);btn.disabled=false;btn.textContent='Try importing again';}
+};actions.append(btn);preview.append(actions);}
+}
+// Inline onclick resolves the newly assigned global function.
+bulkAdd=renderPreview;
+textarea.addEventListener('input',()=>{snapshot=null;preview.replaceChildren();});
+document.getElementById('bulkResult').addEventListener('change',()=>{snapshot=null;preview.replaceChildren();});
+})();
+</script>
+<style>
+.recipe-browser-tools{display:grid;grid-template-columns:minmax(150px,2fr) minmax(120px,1fr);gap:10px;margin:12px 0 16px}
+.recipe-tier-heading{font-size:1rem;margin:18px 0 8px;color:#a33d72}
+.recipe-animal-group{border:1px solid #f1d5e3;border-radius:11px;margin:8px 0;background:#fff}
+.recipe-animal-group summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px;list-style:none;cursor:pointer}
+.recipe-animal-group summary::-webkit-details-marker{display:none}
+.recipe-animal-group summary:after{content:'▾';color:#a33d72;font-size:1.15rem}
+.recipe-animal-group[open] summary:after{content:'▴'}
+.recipe-group-body{border-top:1px solid #f5dfeb;padding:4px 12px}
+.recipe-group-body .item{align-items:center}
+@media(max-width:520px){.recipe-browser-tools{grid-template-columns:1fr}}
+</style>
+<script>
+// Compact, searchable recipe encyclopedia. Keeps all database writes unchanged.
+(function(){
+const list=document.getElementById('recipeList');
+const panel=list.closest('.panel');
+const controls=document.createElement('div');controls.className='recipe-browser-tools';
+controls.innerHTML='<div><label for="recipeBrowserSearch">Search result animals</label><input id="recipeBrowserSearch" type="search" placeholder="e.g. Bison" autocomplete="off"></div><div><label for="recipeBrowserTier">Filter tier</label><select id="recipeBrowserTier"><option value="all">All tiers</option>'+Array.from({length:9},(_,i)=>'<option value="'+(i+2)+'">Tier '+(i+2)+'</option>').join('')+'</select></div>';
+panel.insertBefore(controls,list);
+const search=document.getElementById('recipeBrowserSearch');
+const tier=document.getElementById('recipeBrowserTier');
+const prior=renderRecipes;
+renderRecipes=function(){
+  // Keep original form selectors synchronized with newly added animals.
+  prior();
+  const queryText=search.value.trim().toLocaleLowerCase();
+  const tierValue=tier.value;
+  const openGroups=new Set(Array.from(list.querySelectorAll('details[open]')).map(el=>el.dataset.animal));
+  const grouped=new Map();
+  data.recipes.forEach((recipe,index)=>{
+    const result=animal(recipe.result);
+    if(!result)return;
+    if(tierValue!=='all'&&result.tier!==Number(tierValue))return;
+    if(queryText&&!result.name.toLocaleLowerCase().includes(queryText))return;
+    if(!grouped.has(result.id))grouped.set(result.id,{result,entries:[]});
+    grouped.get(result.id).entries.push({recipe,index});
+  });
+  const groups=[...grouped.values()].sort((a,b)=>a.result.tier-b.result.tier||a.result.name.localeCompare(b.result.name));
+  let currentTier=null;
+  const html=[];
+  for(const group of groups){
+    if(group.result.tier!==currentTier){currentTier=group.result.tier;html.push('<h3 class="recipe-tier-heading">Tier '+currentTier+'</h3>')}
+    group.entries.sort((a,b)=>a.recipe.parents.map(name).join(' + ').localeCompare(b.recipe.parents.map(name).join(' + ')));
+    const expanded=openGroups.has(group.result.id)?' open':'';
+    html.push('<details class="recipe-animal-group" data-animal="'+esc(group.result.id)+'"'+expanded+'><summary><strong>'+esc(group.result.name)+'</strong><span class="pill">'+group.entries.length+' recipe'+(group.entries.length===1?'':'s')+'</span></summary><div class="recipe-group-body">'+group.entries.map(({recipe,index})=>'<div class="item"><span>'+esc(recipe.parents.map(name).join(' + '))+'</span>'+(typeof isAdmin!=='undefined'&&isAdmin?'<button class="danger" onclick="removeRecipe('+index+')">Remove</button>':'')+'</div>').join('')+'</div></details>');
+  }
+  list.innerHTML=html.join('')||'<p class="muted">No recipes match this search or tier.</p>';
+  // Count exactly the recipe rows displayed by the active tier/search filters.
+  const visibleRecipeCount = groups.reduce((total, group) => total + group.entries.length, 0);
+  document.getElementById('recipeCount').textContent = '(' + visibleRecipeCount + ')';
+};
+search.addEventListener('input',()=>renderRecipes());
+tier.addEventListener('change',()=>renderRecipes());
+renderRecipes();
+})();
+</script>
+<script>
+// Keep the collection counter tied to the selected tier and search.
+(function () {
+  const tierSelect = document.getElementById('animalFilter');
+  const searchInput = document.getElementById('animalSearch');
+  const countLabel = document.getElementById('animalCount');
+  const list = document.getElementById('animalList');
+  function refreshCollection() {
+    const tier = tierSelect.value;
+    const search = searchInput.value.trim().toLocaleLowerCase();
+    const matching = data.animals.filter(a =>
+      (tier === 'all' || Number(a.tier) === Number(tier)) &&
+      a.name.toLocaleLowerCase().includes(search)
+    ).sort((a,b) => a.tier-b.tier || a.name.localeCompare(b.name));
+    countLabel.textContent = '(' + matching.length + ')';
+    list.innerHTML = matching.map(a =>
+      '<div class="item"><div><strong>' + esc(a.name) + '</strong> <span class="pill">Tier ' + a.tier + '</span><br>' +
+      '<label class="small"><input class="check" type="checkbox" ' + (a.discovered?'checked':'') +
+      ' onchange="toggleDiscovered(\'' + a.id + '\')"> Discovered</label></div>' +
+      (isAdmin ? '<button class="danger" onclick="removeAnimal(\'' + a.id + '\')">Delete</button>' : '') + '</div>'
+    ).join('') || '<p class="muted">No animals match this tier or search.</p>';
+  }
+  renderAnimals = refreshCollection;
+  tierSelect.addEventListener('change', refreshCollection);
+  searchInput.addEventListener('input', refreshCollection);
+  refreshCollection();
+})();
+</script>
+<script>
+// Recipe browsing is public. Only recipe creation controls require admin access.
+(function(){
+  const search=document.getElementById('recipeBrowserSearch');
+  const tier=document.getElementById('recipeBrowserTier');
+  function enablePublicBrowsing(){
+    if(search) search.disabled=false;
+    if(tier) tier.disabled=false;
+  }
+  const priorRenderAll=renderAll;
+  renderAll=function(){priorRenderAll();enablePublicBrowsing();};
+  enablePublicBrowsing();
+})();
+</script>
+</body></html>
