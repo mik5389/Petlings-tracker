@@ -94,9 +94,10 @@
           row.appendChild(details);
         }
         list.appendChild(row);
+        attachPlan(row,recipe.parents);
       } else {
         // No result ID, animal name, or tier-specific recipe count is exposed in the rendered card.
-        list.appendChild(makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true));
+        const row=makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true);list.appendChild(row);attachPlan(row,recipe.parents);
       }
     }
     if (!entries.length) list.appendChild(makeRow('No ' + selectedLabel.toLowerCase() + ' animals in Tier ' + targetTier + '.',
@@ -129,10 +130,17 @@
       const btn = document.createElement('button'); btn.type='button'; btn.className='secondary';
       btn.textContent = isTried ? 'Mark not tried' : 'Mark tried';
       btn.addEventListener('click', () => { toggleTried(key); renderDiscover(); });
-      row.appendChild(btn); list.appendChild(row);
+      row.appendChild(btn); list.appendChild(row);attachPlan(row,parents);
     }
     if (!total) list.appendChild(makeRow('No matching undocumented combinations.', 'Try a different tier or filter.', null, false));
     renderPages(total);
+  }
+  function attachPlan(row,parents){
+    if(!Array.isArray(parents)||!parents.length)return;
+    const b=document.createElement('button');b.type='button';b.className='secondary discovery-plan-btn';
+    b.textContent='Plan this combination';
+    b.addEventListener('click',()=>{if(window.PetlingsGuided)window.PetlingsGuided.openCombination([...parents]);else toast('Planner is still loading. Please refresh.');});
+    row.appendChild(b);
   }
   function renderPages(total) {
     const count = Math.max(1, Math.ceil(total/pageSize));
