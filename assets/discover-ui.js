@@ -143,7 +143,26 @@
     const label = document.createElement('span'); label.textContent='Page '+(currentPage+1)+' of '+count;
     pager.replaceChildren(back,label,next); pager.className='discover-page-controls';
   }
+  // Undocumented combinations are an administrator-only workspace.
+  // Regular visitors retain the personal discovery checklist and spoiler toggle.
+  function enforceDiscoveryAccess() {
+    const admin = typeof isAdmin !== 'undefined' && isAdmin === true;
+    const missingOption = mode.querySelector('option[value="missing"]');
+    if (missingOption) {
+      missingOption.hidden = !admin;
+      missingOption.disabled = !admin;
+    }
+    if (!admin && mode.value !== 'animals') {
+      mode.value = 'animals';
+      currentPage = 0;
+    }
+    // A single-mode selector adds clutter for visitors.
+    mode.hidden = !admin;
+    const modeLabel = document.querySelector('label[for="discoveryMode"]');
+    if (modeLabel) modeLabel.hidden = !admin;
+  }
   renderDiscover = function () {
+    enforceDiscoveryAccess();
     const isPersonal = mode.value === 'animals';
     document.getElementById('discoveryPersonalControls').hidden = !isPersonal;
     document.getElementById('discoveryMissingControls').hidden = isPersonal;
