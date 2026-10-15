@@ -19,6 +19,7 @@ renderRecipes=function(){
   data.recipes.forEach((recipe,index)=>{
     const result=animal(recipe.result);
     if(!result)return;
+    if(window.PetlingsSpoilers && !window.PetlingsSpoilers.visible(result))return;
     if(tierValue!=='all'&&result.tier!==Number(tierValue))return;
     if(queryText&&!result.name.toLocaleLowerCase().includes(queryText))return;
     if(!grouped.has(result.id))grouped.set(result.id,{result,entries:[]});
@@ -33,7 +34,7 @@ renderRecipes=function(){
     const expanded=openGroups.has(group.result.id)?' open':'';
     html.push('<details class="recipe-animal-group" data-animal="'+esc(group.result.id)+'"'+expanded+'><summary><strong>'+esc(group.result.name)+'</strong><span class="pill">'+group.entries.length+' recipe'+(group.entries.length===1?'':'s')+'</span></summary><div class="recipe-group-body">'+group.entries.map(({recipe,index})=>'<div class="item"><span>'+esc(recipe.parents.map(name).join(' + '))+'</span>'+(typeof isAdmin!=='undefined'&&isAdmin?'<button class="danger" onclick="removeRecipe('+index+')">Remove</button>':'')+'</div>').join('')+'</div></details>');
   }
-  list.innerHTML=html.join('')||'<p class="muted">No recipes match this search or tier.</p>';
+  list.innerHTML=html.join('')||'<p class="muted">No recipes match. Turn on Show spoilers to browse recipes for undiscovered animals.</p>';
   // Count exactly the recipe rows displayed by the active tier/search filters.
   const visibleRecipeCount = groups.reduce((total, group) => total + group.entries.length, 0);
   document.getElementById('recipeCount').textContent = '(' + visibleRecipeCount + ')';
