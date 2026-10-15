@@ -1,5 +1,41 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Petlings Breeding Tracker - Edit Tier v22</title><style>:root{font-family:system-ui,-apple-system,sans-serif;color:#503445;background:#fff5fa}*{box-sizing:border-box}body{margin:0}header{background:#d94f91;color:white;padding:22px max(18px,calc((100vw - 1050px)/2))}h1{margin:0;font-size:1.6rem}header p{margin:5px 0 0;opacity:.85}main{max-width:1050px;margin:auto;padding:18px}nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0;border-radius:9px;background:#e36aa5;color:white;padding:10px 14px}button.secondary{background:#ffe0ee;color:#983c69}button.danger{background:#ffebee;color:#ad3043}nav button{white-space:nowrap;background:#ffe7f1;color:#943f6c}nav button.active{background:#d94f91;color:white}.panel{background:white;border-radius:15px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px #2221}h2{margin:0 0 14px;font-size:1.2rem}h3{font-size:1rem}label{display:block;font-size:.85rem;font-weight:650;margin-bottom:5px}input,select,textarea{width:100%;padding:10px;border:1px solid #edc9da;border-radius:9px;background:white}textarea{min-height:90px}.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}.muted{color:#866c7b;font-size:.9rem}.pill{display:inline-block;border-radius:20px;background:#ffe8f2;color:#a33d72;padding:4px 9px;font-size:.8rem;margin:3px}.item{border-top:1px solid #f5dfeb;padding:11px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.item:first-child{border:0}.small{font-size:.85rem}section[hidden]{display:none}#toast{position:fixed;bottom:20px;left:20px;background:#63384e;color:white;padding:12px 16px;border-radius:10px;display:none;max-width:90vw}.scroll{max-height:520px;overflow:auto}.check{width:auto}summary{cursor:pointer;font-weight:600}code{white-space:pre-wrap}.results{line-height:1.65} .inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.inline input{width:95px}.notice{background:#fff5db;border-radius:9px;padding:10px;margin:12px 0} @media(max-width:520px){main{padding:10px}.panel{padding:14px}}</style><style>
 .reverse-card{border:1px solid #f1d5e3;border-radius:12px;padding:13px;margin:12px 0;background:#fffafd}.reverse-card h3{margin:0 0 8px}.reverse-base{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.reverse-steps{padding-left:23px}.reverse-steps li{margin:5px 0}.reverse-note{font-size:.85rem;color:#866c7b}.reverse-summary{background:#ffe8f2;border-radius:10px;padding:10px;margin:10px 0}
+</style><style id="petlings-pastel-theme">
+/* Petlings pastel game-inspired theme — visual only. */
+:root{color:#344b48;background:#f5f8f4;color-scheme:light}
+body{background:#f5f8f4;color:#344b48}
+header{background:#6f9f94;color:#fff}
+header p{color:#eef7f2}
+.panel{background:#fff;box-shadow:0 2px 12px #344b4815}
+button{background:#6f9f94;color:#fff}
+button:hover:not(:disabled){filter:brightness(.96)}
+button.secondary,#petlingsAccountShortcut{background:#e4e1f3!important;color:#514c6a!important}
+button.danger{background:#f9e5e7;color:#963f4b}
+nav button{background:#e5efe8;color:#42665e}
+nav button.active{background:#6f9f94;color:#fff}
+input,select,textarea{border-color:#cbded6;color:#344b48;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid #8cb8af;outline-offset:1px}
+label{color:#415b56}
+.muted{color:#607b75}
+.pill{background:#e4e1f3;color:#59516f}
+.item,.discovery-result,.discovery-ready-row{border-color:#e0ebe5}
+.notice{background:#fff2de;color:#665640}
+#toast{background:#344b48;color:#fff}
+.recipe-search-menu,.reverse-picker-menu,.quick-merge-suggestions,#guidedPlanner .guided-suggestions{border-color:#cbded6;box-shadow:0 8px 20px #344b4822}
+.recipe-search-option,.reverse-picker-option,.quick-merge-option,#guidedPlanner .guided-suggestions button{color:#344b48}
+.recipe-search-option:hover,.recipe-search-option:focus,.recipe-search-option.keyboard-active,.reverse-picker-option:hover,.reverse-picker-option.active,.quick-merge-option:hover,.quick-merge-option.active,#guidedPlanner .guided-suggestions button:hover,#guidedPlanner .guided-suggestions button.active{background:#e5efe8}
+.recipe-tier-heading,.guided-step-number{color:#567e75}
+.recipe-animal-group,.guided-step{border-color:#d9e7df}
+.recipe-animal-group summary:after{color:#608f84}
+.recipe-group-body{border-color:#e0ebe5}
+.guided-progress{background:#e5efe8}
+.guided-progress div{background:#6f9f94!important}
+.guided-step.current{background:#eff6f1;border-color:#6f9f94;outline-color:#6f9f94}
+.guided-step.done{background:#f1f5f1}
+#petlingsEditDialog{border-color:#cbded6;color:#344b48}
+#petlingsEditDialog::backdrop{background:#233e3988}
+#petlingsAccountFooter{color:#607b75}
+@media(max-width:520px){nav button{border-radius:9px}}
 </style></head><body><header><h1>🐾 Petlings Breeding Tracker</h1><p>Discover recipes • Track inventory • Plan breeding chains</p></header><main><nav id="tabs"><button data-tab="animals" class="active">Animals</button><button data-tab="recipes">Recipes</button><button data-tab="discover">Discover</button><button data-tab="inventory">Inventory</button><button data-tab="planner">Planner</button><button data-tab="backup">Backup</button></nav>
 <section id="animals"><div class="panel"><h2>Add an animal</h2><div class="fields"><div><label>Name</label><input id="animalName" placeholder="e.g. Bison"></div><div><label>Tier</label><select id="animalTier"></select></div></div><button onclick="addAnimal()">Add animal</button><p class="muted">Add animals you know exist, including ones you haven't unlocked. Recipes can only use animals already listed here.</p></div><div class="panel"><h2>Animal collection <span id="animalCount"></span></h2><div class="fields"><input id="animalSearch" placeholder="Search animals" oninput="renderAnimals()"><select id="animalFilter" onchange="renderAnimals()"><option value="all">All tiers</option></select></div><div id="animalList" class="scroll"></div></div></section>
 <section id="recipes" hidden><div class="panel"><h2>Add confirmed recipe</h2><div class="fields"><div><label>Result animal</label><select id="recipeResult" onchange="updateRecipeInputs()"></select></div><div id="parentInputs"></div></div><button onclick="addRecipe()">Save recipe</button><p class="muted">Parent order doesn't matter. For Tier 8 and above, the tracker currently assumes three parents from the preceding tier. Identical parents are allowed.</p></div><div class="panel"><h2>Bulk-import recipes for one animal</h2><label>Result animal</label><select id="bulkResult"></select><p class="muted">One recipe per line. Separate parent names with + (example: Cat + Bunny). For Tier 8, use three names.</p><textarea id="bulkText" placeholder="Cat + Bunny&#10;Chick + Cat"></textarea><button onclick="bulkAdd()">Import recipes</button></div><div class="panel"><h2>Known recipes <span id="recipeCount"></span></h2><div id="recipeList" class="scroll"></div></div></section>
