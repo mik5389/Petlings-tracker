@@ -21,3 +21,10 @@ test('undocumented means no recipe for that parent combination',()=>{
   assert.equal(engine.isUnresolved(['a1','a10'],recipes,key),false);
   assert.equal(engine.isUnresolved(['a1','a999'],recipes,key),true);
 });
+
+test('discovery status filters preserve both views',()=>{
+  assert.deepEqual(engine.filterByDiscovery(animals,2,'undiscovered').map(a=>a.id),['a2','a3']);
+  const updated=animals.map(a=>a.id==='a2'?{...a,discovered:true}:a);
+  assert.deepEqual(engine.filterByDiscovery(updated,2,'discovered').map(a=>a.id),['a2']);
+  assert.deepEqual(engine.filterByDiscovery(updated,2,'all').map(a=>a.id),['a2','a3']);
+});
