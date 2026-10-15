@@ -160,6 +160,9 @@
     mode.hidden = !admin;
     const modeLabel = document.querySelector('label[for="discoveryMode"]');
     if (modeLabel) modeLabel.hidden = !admin;
+    // Hide the whole grid cell so visitors do not see an empty column.
+    const modeField = mode.closest('.fields > div');
+    if (modeField) modeField.hidden = !admin;
   }
   renderDiscover = function () {
     enforceDiscoveryAccess();
