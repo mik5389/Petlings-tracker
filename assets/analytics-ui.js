@@ -3,6 +3,7 @@
   'use strict';
   const CONSENT='petlings-analytics-opt-in-v1';
   const EXCLUDE='petlings-analytics-exclude-device-v1';
+  const DECISION='petlings-analytics-choice-v1';
   const VISIT='petlings-analytics-basic-visit-v2';
   const allowed=new Set(['visit','tab_animals','tab_recipes','tab_discover','tab_inventory','tab_planner','tab_backup','plan_calculate','quick_merge']);
   const get=(k)=>{try{return localStorage.getItem(k)}catch(_){return null}};
@@ -34,6 +35,30 @@
     trackingStatus.textContent=state;
   }
   showConsent();
+  // First-visit choice: do not start optional tracking until explicitly accepted.
+  // Basic visit counting follows the separate, disclosed basic-analytics policy.
+  const privacyDialog=document.createElement('dialog');
+  privacyDialog.id='petlingsAnalyticsWelcome';
+  privacyDialog.setAttribute('aria-labelledby','petlingsAnalyticsWelcomeTitle');
+  privacyDialog.innerHTML=`<div style="max-width:420px"><h2 id="petlingsAnalyticsWelcomeTitle">Help improve Petlings! 🐾</h2><p>We count basic website visits, general device type, and referral source (such as Reddit), unless this device is excluded.</p><p>Would you also like to share anonymous feature usage, such as which tabs and calculators you use? We don't include your inventory, breeding choices, name, or email in analytics.</p><div style="display:flex;flex-direction:column;gap:10px"><button type="button" id="petlingsAnalyticsAccept">Yes, share feature usage</button><button type="button" class="secondary" id="petlingsAnalyticsBasic">Basic analytics only</button></div><p class="muted small">You can change this later in Backup → Privacy &amp; Analytics.</p></div>`;
+  privacyDialog.style.cssText='border:1px solid #b8d3c9;border-radius:16px;padding:24px;width:min(460px,calc(100vw - 32px));max-height:85vh;overflow:auto;color:#344b48;background:#fff;box-shadow:0 12px 50px #0003';
+  const backdropStyle=document.createElement('style');backdropStyle.textContent='#petlingsAnalyticsWelcome::backdrop{background:rgba(23,39,38,.6)}';document.head.append(backdropStyle);
+  document.body.append(privacyDialog);
+  function decide(accept){
+    optedIn=accept;checkbox.checked=accept;
+    put(CONSENT,accept?'yes':'no');put(DECISION,'yes');
+    showConsent();privacyDialog.close();visitOnce();
+  }
+  privacyDialog.querySelector('#petlingsAnalyticsAccept').addEventListener('click',()=>decide(true));
+  privacyDialog.querySelector('#petlingsAnalyticsBasic').addEventListener('click',()=>decide(false));
+  // Prevent dismissal without making a choice; either option leaves the site usable.
+  privacyDialog.addEventListener('cancel',e=>e.preventDefault());
+  async function showFirstVisitChoice(){
+    if(get(DECISION)==='yes'||excluded)return;
+    const admin=await adminCheck();
+    if(admin!==false||excluded||get(DECISION)==='yes')return;
+    if(!privacyDialog.open)privacyDialog.showModal();
+  }
   const device=()=>/iPad|Tablet|Android(?!.*Mobile)/i.test(navigator.userAgent)?'tablet':/Mobi|Android|iPhone/i.test(navigator.userAgent)?'mobile':'desktop';
   const source=()=>{try{const host=new URL(document.referrer).hostname.toLowerCase();return host==='reddit.com'||host.endsWith('.reddit.com')?'reddit':host?'other':'direct';}catch(_){return 'direct';}};
   const originalSource=source();
@@ -70,9 +95,9 @@
       send('visit');
     });
   }
-  checkbox.addEventListener('change',()=>{optedIn=checkbox.checked;put(CONSENT,optedIn?'yes':'no');showConsent();});
-  excludeBox.addEventListener('change',()=>{excluded=excludeBox.checked;put(EXCLUDE,excluded?'yes':'no');showConsent();if(!excluded)visitOnce();});
-  if(!excluded)visitOnce();
+  checkbox.addEventListener('change',()=>{optedIn=checkbox.checked;put(CONSENT,optedIn?'yes':'no');put(DECISION,'yes');showConsent();});
+  excludeBox.addEventListener('change',()=>{excluded=excludeBox.checked;put(EXCLUDE,excluded?'yes':'no');showConsent();if(!excluded){if(get(DECISION)==='yes')visitOnce();else showFirstVisitChoice();}});
+  if(!excluded){if(get(DECISION)==='yes')visitOnce();else showFirstVisitChoice();}
   nav.addEventListener('click',event=>{const tab=event.target.closest('button[data-tab]');if(!tab||tab.dataset.tab==='analytics')return;send('tab_'+tab.dataset.tab);});
   document.addEventListener('click',event=>{if(event.target.closest('#guidedCalculate'))send('plan_calculate');if(event.target.closest('#quickMergeApply,#quickMergeButton'))send('quick_merge');});
   function applyAccess(){
