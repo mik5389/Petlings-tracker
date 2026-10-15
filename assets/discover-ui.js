@@ -156,13 +156,21 @@
       mode.value = 'animals';
       currentPage = 0;
     }
-    // A single-mode selector adds clutter for visitors.
+    // Hide the complete View field (including its label and grid footprint).
+    // Explicit display styling avoids layout gaps from competing CSS rules.
+    const modeField = mode.parentElement;
+    const fieldGrid = modeField?.parentElement;
+    if (modeField) {
+      modeField.hidden = !admin;
+      if (admin) modeField.style.removeProperty('display');
+      else modeField.style.setProperty('display', 'none', 'important');
+    }
+    if (fieldGrid && fieldGrid.classList.contains('fields')) {
+      if (admin) fieldGrid.style.removeProperty('grid-template-columns');
+      else fieldGrid.style.setProperty('grid-template-columns', 'minmax(0, 1fr)');
+    }
+    // The View selector remains available to administrators.
     mode.hidden = !admin;
-    const modeLabel = document.querySelector('label[for="discoveryMode"]');
-    if (modeLabel) modeLabel.hidden = !admin;
-    // Hide the whole grid cell so visitors do not see an empty column.
-    const modeField = mode.closest('.fields > div');
-    if (modeField) modeField.hidden = !admin;
   }
   renderDiscover = function () {
     enforceDiscoveryAccess();
