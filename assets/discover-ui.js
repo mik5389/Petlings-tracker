@@ -94,10 +94,10 @@
           row.appendChild(details);
         }
         list.appendChild(row);
-        attachPlan(row,recipe.parents);
+        attachPlan(row,recipe.parents);attachReadiness(row,recipes.map(r=>r.parents));
       } else {
         // No result ID, animal name, or tier-specific recipe count is exposed in the rendered card.
-        const row=makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true);list.appendChild(row);attachPlan(row,recipe.parents);
+        const row=makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true);list.appendChild(row);attachPlan(row,recipe.parents);attachReadiness(row,recipes.map(r=>r.parents));
       }
     }
     if (!entries.length) list.appendChild(makeRow('No ' + selectedLabel.toLowerCase() + ' animals in Tier ' + targetTier + '.',
@@ -130,10 +130,59 @@
       const btn = document.createElement('button'); btn.type='button'; btn.className='secondary';
       btn.textContent = isTried ? 'Mark not tried' : 'Mark tried';
       btn.addEventListener('click', () => { toggleTried(key); renderDiscover(); });
-      row.appendChild(btn); list.appendChild(row);attachPlan(row,parents);
+      row.appendChild(btn); list.appendChild(row);attachPlan(row,parents);attachReadiness(row,[parents]);
     }
     if (!total) list.appendChild(makeRow('No matching undocumented combinations.', 'Try a different tier or filter.', null, false));
     renderPages(total);
+  }
+  // On-demand comparison. Work in small batches so large recipe collections do not freeze the page.
+  function attachReadiness(row, combinations) {
+    if (!window.PetlingsGuidedEngine || !combinations.length) return;
+    const button=document.createElement('button');button.type='button';button.className='secondary discovery-readiness-button';
+    button.textContent=combinations.length>1?'Compare breeding options':'Check inventory readiness';
+    const results=document.createElement('div');results.className='discovery-readiness-results';
+    row.append(button,results);
+    let run=0;
+    button.addEventListener('click',()=>{
+      const token=++run;
+      const inventoryAtStart=JSON.stringify(data.inventory);
+      const recipesAtStart=data.recipes;
+      const candidates=combinations.slice(0,120);
+      const evaluated=[];let pos=0;
+      button.disabled=true;
+      results.textContent='Checking breeding paths… 0 / '+candidates.length;
+      function chunk(){
+        if(token!==run||!row.isConnected)return;
+        if(JSON.stringify(data.inventory)!==inventoryAtStart || data.recipes!==recipesAtStart){button.disabled=false;results.textContent='Inventory or recipes changed. Click again for updated results.';return;}
+        const end=Math.min(pos+2,candidates.length);
+        for(;pos<end;pos++){
+          const parents=candidates[pos];
+          const direct=parents.every(id=>parents.filter(p=>p===id).length<=Number(data.inventory[id]||0));
+          const plan=window.PetlingsGuidedEngine.plan(data.animals,data.recipes,data.inventory,{type:'combination',parents},'inventory');
+          if(plan.error){evaluated.push({parents,error:plan.error,missing:Infinity,merges:Infinity,direct:false});continue;}
+          const missing=plan.missing.reduce((n,m)=>n+m.count,0);
+          evaluated.push({parents,missing,merges:plan.merges,direct});
+        }
+        if(pos<candidates.length){results.textContent='Checking breeding paths… '+pos+' / '+candidates.length;setTimeout(chunk,0);return;}
+        button.disabled=false;
+        evaluated.sort((a,b)=>a.missing-b.missing||a.merges-b.merges);
+        results.replaceChildren();
+        const intro=document.createElement('p');intro.className='muted small';intro.textContent='Best options first · '+evaluated.length+' checked'+(combinations.length>120?' (first 120 of '+combinations.length+' recipes)':'')+'.';results.append(intro);
+        for(const entry of evaluated.slice(0,10)){
+          const line=document.createElement('div');line.className='discovery-ready-row';
+          const desc=document.createElement('div');
+          const names=entry.parents.map(name).join(' + ');
+          const title=document.createElement('strong');title.textContent=names;desc.append(title);
+          const note=document.createElement('div');note.className='muted small';
+          note.textContent=entry.error?'No complete known path':entry.direct?'Ready to merge now':entry.missing===0?'Can breed using current inventory · '+entry.merges+' preparation merges':'Missing '+entry.missing+' Tier 1 animals · '+entry.merges+' preparation merges';
+          desc.append(note);line.append(desc);
+          const go=document.createElement('button');go.type='button';go.className='secondary';go.textContent='Plan this';
+          go.onclick=()=>window.PetlingsGuided?.openCombination([...entry.parents]);line.append(go);results.append(line);
+        }
+        if(evaluated.length>10){const note=document.createElement('p');note.className='muted small';note.textContent='Showing the 10 easiest options.';results.append(note)}
+      }
+      setTimeout(chunk,0);
+    });
   }
   function attachPlan(row,parents){
     if(!Array.isArray(parents)||!parents.length)return;
