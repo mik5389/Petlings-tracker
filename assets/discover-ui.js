@@ -54,7 +54,17 @@
   }
   function renderPersonal() {
     const t = Number(tier.value || 1), targetTier = t + 1;
-    const candidates = PetlingsDiscoveryEngine.filterByDiscovery(data.animals, targetTier, status.value);
+    const allInTier = data.animals.filter(a => Number(a.tier) === targetTier);
+    const discoveredCount = allInTier.filter(a => a.discovered === true).length;
+    const undiscoveredCount = allInTier.length - discoveredCount;
+    // Calculate the displayed list directly from personal discovery flags.
+    // This does not depend on a separate engine version being cached by the browser.
+    const candidates = allInTier.filter(a => status.value === 'all' ||
+      (status.value === 'discovered' ? a.discovered === true : a.discovered !== true));
+    const selectedLabel = status.value === 'all' ? 'All animals' :
+      status.value === 'discovered' ? 'Discovered' : 'Undiscovered';
+    // Keep the selected filter and its totals visible, even when spoilers are hidden.
+    status.setAttribute('aria-label', 'Show animals: ' + selectedLabel);
     const recipesByResult = new Map();
     for (const r of data.recipes) {
       if (!recipesByResult.has(r.result)) recipesByResult.set(r.result, []);
@@ -62,9 +72,9 @@
     }
     const entries = candidates.map(a => ({a, recipes: recipesByResult.get(a.id) || []}))
       .sort((x,y) => x.a.name.localeCompare(y.a.name));
-    stats.textContent = entries.length + ' ' + (status.value === 'all' ? 'total' : status.value) + ' Tier ' + targetTier + ' animals · ' +
-      entries.filter(e => e.recipes.length).length + ' with documented recipes. ' +
-      'Only animals in the shared encyclopedia are included.';
+    stats.textContent = selectedLabel + ': ' + entries.length + ' shown · Tier ' + targetTier +
+      ' · ' + discoveredCount + ' discovered · ' + undiscoveredCount + ' undiscovered · ' +
+      entries.filter(e => e.recipes.length).length + ' with documented recipes.';
     currentPage = Math.min(currentPage, Math.max(0, Math.ceil(entries.length / pageSize) - 1));
     const visible = entries.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
     for (const {a,recipes} of visible) {
@@ -89,7 +99,8 @@
         list.appendChild(makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true));
       }
     }
-    if (!entries.length) list.appendChild(makeRow('No animals match this discovery filter.', 'Choose another tier or switch between Discovered, Undiscovered, and All animals.', null, false));
+    if (!entries.length) list.appendChild(makeRow('No ' + selectedLabel.toLowerCase() + ' animals in Tier ' + targetTier + '.',
+      'Switch the filter or choose another tier. Your discovery progress is saved on this device.', null, false));
     renderPages(entries.length);
     updateMarkOptions();
   }
@@ -142,7 +153,13 @@
   function changeView() { currentPage=0; renderDiscover(); }
   mode.addEventListener('change',()=>{try{localStorage.setItem(modeKey,mode.value);}catch(_){} changeView();});
   tier.addEventListener('change',changeView);
-  status.addEventListener('change',()=>{try{localStorage.setItem(statusKey,status.value);}catch(_){} changeView();});
+  function onStatusChange() {
+    try { localStorage.setItem(statusKey, status.value); } catch (_) {}
+    currentPage = 0;
+    renderDiscover();
+  }
+  status.addEventListener('change', onStatusChange);
+  status.addEventListener('input', onStatusChange);
   filter.addEventListener('change',changeView);
   reveal.addEventListener('change',()=>{try{localStorage.setItem(revealKey,String(reveal.checked));}catch(_){} changeView();});
   function updateMarkButton(){
