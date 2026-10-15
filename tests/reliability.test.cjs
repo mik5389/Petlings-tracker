@@ -1,0 +1,23 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const assetNames=[...html.matchAll(/<script\s+src="(assets\/[^\"]+\.js)"/g)].map(x=>x[1]);
+function planner(){const context={};vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(root,'assets/reverse-engine.js'),'utf8'),context);return context.PetlingsReversePlanner.calculate;}
+const a=(id,tier,name=id)=>({id,tier,name});
+const r=(result,...parents)=>({result,parents});
+test('all locally referenced JavaScript assets exist',()=>{assert.ok(assetNames.length>=10);for(const name of assetNames)assert.ok(fs.existsSync(path.join(root,name)),name);});
+test('every local JS file parses',()=>{for(const name of assetNames)assert.doesNotThrow(()=>new vm.Script(fs.readFileSync(path.join(root,name),'utf8'),{filename:name}));});
+test('reverse planner handles Tier 1',()=>{const x=planner()([a('chick',1)],[],'chick',3);assert.equal(x.plans[0].base[0].count,3);assert.equal(x.plans[0].merges,0);});
+test('reverse planner calculates multi-tier requirements and order',()=>{const animals=[a('chick',1),a('bunny',1),a('cat',2),a('bison',3)];const x=planner()(animals,[r('cat','chick','bunny'),r('bison','cat','cat')],'bison');assert.equal(x.plans[0].merges,3);assert.deepEqual(Object.fromEntries(Array.from(x.plans[0].base,b=>[b.id,b.count])),{bunny:2,chick:2});assert.equal(x.plans[0].steps.at(-1).result,'bison');});
+test('reverse planner supports three Tier 7 parents for Tier 8',()=>{const animals=[a('seed',1)];const recipes=[];for(let tier=2;tier<=8;tier++){const id='t'+tier;animals.push(a(id,tier));recipes.push(r(id,...Array(tier>=8?3:2).fill(tier===2?'seed':'t'+(tier-1))));}const x=planner()(animals,recipes,'t8');assert.equal(x.plans[0].base[0].count,192);assert.equal(x.plans[0].merges,190);});
+test('reverse planner reports missing recipes without crashing',()=>{const x=planner()([a('unknown',4)],[],'unknown');assert.match(x.error,/No complete recipe chain/);});
+test('reverse planner picks lower-merge recipe',()=>{const animals=[a('a',1),a('b',1),a('c',2),a('d',2),a('target',3)];const recipes=[r('c','a','a'),r('d','b','b'),r('target','c','d'),r('target','c','c')];const x=planner()(animals,recipes,'target');assert.equal(x.plans[0].merges,3);assert.equal(x.totalAlternatives,2);});
+test('visitor recipe browser remains enabled',()=>{const src=fs.readFileSync(path.join(root,'assets/07-visitor.js'),'utf8');assert.match(src,/recipeBrowserSearch/);assert.match(src,/recipeBrowserTier/);});
+test('shared recipe loader uses pagination beyond 1000',()=>{const src=fs.readFileSync(path.join(root,'assets/02-supabase.js'),'utf8');assert.match(src,/\.range\(start,start\+pageSize-1\)/);assert.match(src,/rows\.length<pageSize/);});
+test('personal inventory reset does not delete shared recipes',()=>{const src=fs.readFileSync(path.join(root,'assets/inventory-ui.js'),'utf8');assert.match(src,/data\.inventory=\{\}/);assert.doesNotMatch(src,/data\.recipes\s*=\s*\[\]/);});
+test('tier editor preserves animal identity',()=>{const src=fs.readFileSync(path.join(root,'assets/08-animal-edit.js'),'utf8');assert.match(src,/\.update\(\{tier:next\}\)\.eq\('id',dbId\(id\)\)/);});
+test('no service role key appears in published files',()=>{for(const f of [html,...assetNames.map(x=>fs.readFileSync(path.join(root,x),'utf8'))])assert.doesNotMatch(f,/sb_secret_[a-zA-Z0-9_-]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);});
