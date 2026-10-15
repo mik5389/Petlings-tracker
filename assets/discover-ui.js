@@ -4,6 +4,7 @@
   const mode = document.getElementById('discoveryMode');
   const tier = document.getElementById('discoverTier');
   const reveal = document.getElementById('discoveryReveal');
+  const status = document.getElementById('discoveryStatus');
   const filter = document.getElementById('discoverFilter');
   const list = document.getElementById('discoverList');
   const stats = document.getElementById('discoverStats');
@@ -12,19 +13,21 @@
   const markList = document.getElementById('discoveryAnimalNames');
   const revealKey = 'petlings-discovery-reveal-v1';
   const modeKey = 'petlings-discovery-mode-v1';
+  const statusKey = 'petlings-discovery-status-v1';
   const pageSize = 60;
   let currentPage = 0;
-  try { reveal.checked = localStorage.getItem(revealKey) === 'true'; mode.value = localStorage.getItem(modeKey) || 'animals'; } catch (_) {}
+  try { reveal.checked = localStorage.getItem(revealKey) === 'true'; mode.value = localStorage.getItem(modeKey) || 'animals'; status.value = localStorage.getItem(statusKey) || 'undiscovered'; } catch (_) {}
   function parentCount(parentTier) { return parentTier >= 7 ? 3 : 2; }
   function persist() { if (typeof personalSave === 'function') personalSave(); else save(); }
   function isKnownAnimal(a) { return a.discovered === true; }
-  function markDiscovered(id) {
+  function setDiscovered(id, discovered) {
     const a = animal(id);
-    if (!a || a.discovered) return;
-    a.discovered = true;
+    if (!a || a.discovered === discovered) return;
+    a.discovered = discovered;
     persist();
-    toast(a.name + ' marked discovered!');
+    toast(a.name + (discovered ? ' marked discovered!' : ' marked undiscovered!'));
     renderDiscover();
+    updateMarkButton();
   }
   function makeRow(text, note, id, spoiler) {
     const row = document.createElement('div'); row.className = 'discovery-result';
@@ -34,14 +37,16 @@
     if (id) {
       const actions = document.createElement('div'); actions.className = 'discovery-actions';
       const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'secondary';
-      btn.textContent = 'Mark discovered'; btn.setAttribute('aria-label', 'Mark this animal discovered');
-      btn.addEventListener('click', () => markDiscovered(id)); actions.appendChild(btn); row.appendChild(actions);
+      const a = animal(id);
+      btn.textContent = a?.discovered ? 'Mark undiscovered' : 'Mark discovered';
+      btn.setAttribute('aria-label', btn.textContent + ': ' + (a?.name || 'animal'));
+      btn.addEventListener('click', () => setDiscovered(id, !a?.discovered)); actions.appendChild(btn); row.appendChild(actions);
     }
     return row;
   }
   function updateMarkOptions() {
     const q = markInput.value.trim().toLocaleLowerCase();
-    const options = data.animals.filter(a => !a.discovered && (!q || a.name.toLocaleLowerCase().includes(q)))
+    const options = data.animals.filter(a => !q || a.name.toLocaleLowerCase().includes(q))
       .sort((a,b) => a.name.localeCompare(b.name)).slice(0,100);
     markList.replaceChildren(...options.map(a => {
       const opt = document.createElement('option'); opt.value = a.name; return opt;
@@ -49,7 +54,7 @@
   }
   function renderPersonal() {
     const t = Number(tier.value || 1), targetTier = t + 1;
-    const candidates = PetlingsDiscoveryEngine.pendingAnimals(data.animals, data.recipes, targetTier).map(item => animal(item.id));
+    const candidates = PetlingsDiscoveryEngine.filterByDiscovery(data.animals, targetTier, status.value);
     const recipesByResult = new Map();
     for (const r of data.recipes) {
       if (!recipesByResult.has(r.result)) recipesByResult.set(r.result, []);
@@ -57,20 +62,20 @@
     }
     const entries = candidates.map(a => ({a, recipes: recipesByResult.get(a.id) || []}))
       .sort((x,y) => x.a.name.localeCompare(y.a.name));
-    stats.textContent = entries.length + ' undiscovered Tier ' + targetTier + ' animals · ' +
+    stats.textContent = entries.length + ' ' + (status.value === 'all' ? 'total' : status.value) + ' Tier ' + targetTier + ' animals · ' +
       entries.filter(e => e.recipes.length).length + ' with documented recipes. ' +
       'Only animals in the shared encyclopedia are included.';
     currentPage = Math.min(currentPage, Math.max(0, Math.ceil(entries.length / pageSize) - 1));
     const visible = entries.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
     for (const {a,recipes} of visible) {
       if (!recipes.length) {
-        if (reveal.checked) list.appendChild(makeRow(a.name, 'No confirmed recipe recorded yet.', a.id, false));
+        if (reveal.checked || a.discovered) list.appendChild(makeRow(a.name, 'No confirmed recipe recorded yet.', a.id, false));
         else list.appendChild(makeRow('Undocumented animal', 'No suggested parent combination available yet. Use the name entry above after discovering it.', null, true));
         continue;
       }
       const recipe = recipes[0];
       const parents = recipe.parents.map(name).join(' + ');
-      if (reveal.checked) {
+      if (reveal.checked || a.discovered) {
         const row = makeRow(a.name + ' (Tier ' + a.tier + ')', 'Try: ' + parents + ' · ' + recipes.length + ' known recipe(s)', a.id, false);
         if (recipes.length > 1) {
           const details = document.createElement('details'); const summary = document.createElement('summary');
@@ -84,7 +89,7 @@
         list.appendChild(makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true));
       }
     }
-    if (!entries.length) list.appendChild(makeRow('No undiscovered animals in this tier.', 'Add more animals to the shared encyclopedia or select another tier.', null, false));
+    if (!entries.length) list.appendChild(makeRow('No animals match this discovery filter.', 'Choose another tier or switch between Discovered, Undiscovered, and All animals.', null, false));
     renderPages(entries.length);
     updateMarkOptions();
   }
@@ -137,15 +142,19 @@
   function changeView() { currentPage=0; renderDiscover(); }
   mode.addEventListener('change',()=>{try{localStorage.setItem(modeKey,mode.value);}catch(_){} changeView();});
   tier.addEventListener('change',changeView);
+  status.addEventListener('change',()=>{try{localStorage.setItem(statusKey,status.value);}catch(_){} changeView();});
   filter.addEventListener('change',changeView);
   reveal.addEventListener('change',()=>{try{localStorage.setItem(revealKey,String(reveal.checked));}catch(_){} changeView();});
-  markInput.addEventListener('input',updateMarkOptions);
+  function updateMarkButton(){
+    const selected = data.animals.find(a=>a.name.toLocaleLowerCase()===markInput.value.trim().toLocaleLowerCase());
+    document.getElementById('discoveryMarkButton').textContent = selected?.discovered ? 'Mark undiscovered' : 'Mark discovered';
+  }
+  markInput.addEventListener('input',()=>{updateMarkOptions();updateMarkButton();});
   document.getElementById('discoveryMarkButton').addEventListener('click',()=>{
     const text=markInput.value.trim().toLocaleLowerCase();
     const a=data.animals.find(a=>a.name.toLocaleLowerCase()===text);
     if (!a) {toast('Choose an existing animal name');return;}
-    if (a.discovered) {toast('Already marked discovered');return;}
-    markDiscovered(a.id); markInput.value=''; updateMarkOptions();
+    setDiscovered(a.id, !a.discovered); markInput.value=''; updateMarkOptions();
   });
   markInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('discoveryMarkButton').click();}});
   // When the user checks Discovered on the Animals page, refresh this checklist too.
