@@ -16,6 +16,8 @@
   const statusKey = 'petlings-discovery-status-v1';
   const pageSize = 60;
   let currentPage = 0;
+  let rankingRun = 0;
+  let rankingCache = {key:null, entries:null};
   try { reveal.checked = localStorage.getItem(revealKey) === 'true'; mode.value = localStorage.getItem(modeKey) || 'animals'; status.value = localStorage.getItem(statusKey) || 'undiscovered'; } catch (_) {}
   function parentCount(parentTier) { return parentTier >= 7 ? 3 : 2; }
   function persist() { if (typeof personalSave === 'function') personalSave(); else save(); }
@@ -52,58 +54,82 @@
       const opt = document.createElement('option'); opt.value = a.name; return opt;
     }));
   }
+  function rankingKey(kind, extra) {
+    // Recalculate whenever inventory, recipes, animals, or the chosen filters change.
+    return JSON.stringify([kind, extra, data.inventory, data.recipes, data.animals.map(a=>[a.id,a.tier,a.discovered]), data.tried]);
+  }
+  function evaluateParents(parents) {
+    if (!window.PetlingsGuidedEngine) return {missing:Infinity,merges:Infinity,error:'Planner unavailable'};
+    try {
+      const result=window.PetlingsGuidedEngine.plan(data.animals,data.recipes,data.inventory,{type:'combination',parents},'inventory');
+      if(result.error)return {missing:Infinity,merges:Infinity,error:result.error};
+      return {missing:result.missing.reduce((n,x)=>n+x.count,0),merges:result.merges,error:null};
+    } catch(e) { return {missing:Infinity,merges:Infinity,error:String(e.message||e)}; }
+  }
+  const rankCompare=(a,b)=>a.missing-b.missing||a.merges-b.merges||a.sortName.localeCompare(b.sortName);
+  function calculateRanked(kind,key,items,calculate,finished) {
+    const token=++rankingRun;
+    if(rankingCache.key===key && rankingCache.entries){finished(rankingCache.entries);return;}
+    const results=[];let position=0;
+    stats.textContent='Ranking combinations using your current inventory… 0 / '+items.length;
+    pager.replaceChildren();
+    list.replaceChildren();
+    const progress=document.createElement('p');progress.className='muted';progress.textContent='Finding the easiest combinations…';list.append(progress);
+    function batch(){
+      if(token!==rankingRun)return;
+      const end=Math.min(position+3,items.length);
+      for(;position<end;position++)results.push(calculate(items[position]));
+      if(position<items.length){
+        stats.textContent='Ranking combinations using your current inventory… '+position+' / '+items.length;
+        setTimeout(batch,0);return;
+      }
+      results.sort(rankCompare);
+      rankingCache={key,entries:results};
+      finished(results);
+    }
+    setTimeout(batch,0);
+  }
   function renderPersonal() {
-    const t = Number(tier.value || 1), targetTier = t + 1;
-    const allInTier = data.animals.filter(a => Number(a.tier) === targetTier);
-    const discoveredCount = allInTier.filter(a => a.discovered === true).length;
-    const undiscoveredCount = allInTier.length - discoveredCount;
-    // Calculate the displayed list directly from personal discovery flags.
-    // This does not depend on a separate engine version being cached by the browser.
-    const candidates = allInTier.filter(a => status.value === 'all' ||
-      (status.value === 'discovered' ? a.discovered === true : a.discovered !== true));
-    const selectedLabel = status.value === 'all' ? 'All animals' :
-      status.value === 'discovered' ? 'Discovered' : 'Undiscovered';
-    // Keep the selected filter and its totals visible, even when spoilers are hidden.
-    status.setAttribute('aria-label', 'Show animals: ' + selectedLabel);
-    const recipesByResult = new Map();
-    for (const r of data.recipes) {
-      if (!recipesByResult.has(r.result)) recipesByResult.set(r.result, []);
-      recipesByResult.get(r.result).push(r);
-    }
-    const entries = candidates.map(a => ({a, recipes: recipesByResult.get(a.id) || []}))
-      .sort((x,y) => x.a.name.localeCompare(y.a.name));
-    stats.textContent = selectedLabel + ': ' + entries.length + ' shown · Tier ' + targetTier +
-      ' · ' + discoveredCount + ' discovered · ' + undiscoveredCount + ' undiscovered · ' +
-      entries.filter(e => e.recipes.length).length + ' with documented recipes.';
-    currentPage = Math.min(currentPage, Math.max(0, Math.ceil(entries.length / pageSize) - 1));
-    const visible = entries.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-    for (const {a,recipes} of visible) {
-      if (!recipes.length) {
-        if (reveal.checked || a.discovered) list.appendChild(makeRow(a.name, 'No confirmed recipe recorded yet.', a.id, false));
-        else list.appendChild(makeRow('Undocumented animal', 'No suggested parent combination available yet. Use the name entry above after discovering it.', null, true));
-        continue;
+    const t=Number(tier.value||1),targetTier=t+1;
+    const allInTier=data.animals.filter(a=>Number(a.tier)===targetTier);
+    const discoveredCount=allInTier.filter(a=>a.discovered===true).length;
+    const candidates=allInTier.filter(a=>status.value==='all'||(status.value==='discovered'?a.discovered===true:a.discovered!==true));
+    const recipesByResult=new Map();
+    for(const r of data.recipes){if(!recipesByResult.has(r.result))recipesByResult.set(r.result,[]);recipesByResult.get(r.result).push(r);}
+    const entries=candidates.map(a=>({a,recipes:recipesByResult.get(a.id)||[]}));
+    const key=rankingKey('personal',[t,status.value]);
+    calculateRanked('personal',key,entries,entry=>{
+      let best={missing:Infinity,merges:Infinity},bestRecipe=null;
+      for(const recipe of entry.recipes){
+        const rank=evaluateParents(recipe.parents);
+        if(rank.missing<best.missing||(rank.missing===best.missing&&rank.merges<best.merges)){best=rank;bestRecipe=recipe;}
+        if(best.missing===0&&best.merges===0)break;
       }
-      const recipe = recipes[0];
-      const parents = recipe.parents.map(name).join(' + ');
-      if (reveal.checked || a.discovered) {
-        const row = makeRow(a.name + ' (Tier ' + a.tier + ')', 'Try: ' + parents + ' · ' + recipes.length + ' known recipe(s)', a.id, false);
-        if (recipes.length > 1) {
-          const details = document.createElement('details'); const summary = document.createElement('summary');
-          summary.textContent = 'See all ' + recipes.length + ' recipes'; details.appendChild(summary);
-          for (const r of recipes) { const line = document.createElement('div'); line.className = 'small'; line.textContent = r.parents.map(name).join(' + '); details.appendChild(line); }
-          row.appendChild(details);
+      return {...entry,...best,bestRecipe,sortName:entry.a.name};
+    },ranked=>{
+      list.replaceChildren();
+      const selectedLabel=status.value==='all'?'All animals':status.value==='discovered'?'Discovered':'Undiscovered';
+      stats.textContent=selectedLabel+': '+ranked.length+' shown · Tier '+targetTier+' · '+discoveredCount+' discovered · '+(allInTier.length-discoveredCount)+' undiscovered · ranked by missing Tier 1 animals, then merges.';
+      currentPage=Math.min(currentPage,Math.max(0,Math.ceil(ranked.length/pageSize)-1));
+      for(const entry of ranked.slice(currentPage*pageSize,(currentPage+1)*pageSize)){
+        const {a,recipes,bestRecipe,missing,merges}=entry;
+        const visible=reveal.checked||a.discovered;
+        const title=visible?a.name+' (Tier '+a.tier+')':bestRecipe?bestRecipe.parents.map(name).join(' + '):'Undocumented animal';
+        const readiness=Number.isFinite(missing)?(missing===0?(merges===0?'Ready to merge now':'Can breed with current inventory · '+merges+' merges'):'Missing '+missing+' Tier 1 animals · '+merges+' merges'):'No complete known breeding path';
+        const note=(visible&&bestRecipe?'Best known recipe: '+bestRecipe.parents.map(name).join(' + ')+' · ':'')+readiness;
+        const row=makeRow(title,note,visible?a.id:null,!visible);
+        list.append(row);
+        if(bestRecipe)attachPlan(row,bestRecipe.parents);
+        if(visible&&recipes.length>1){
+          const details=document.createElement('details'),summary=document.createElement('summary');
+          summary.textContent='See all '+recipes.length+' known recipes';details.append(summary);
+          for(const r of recipes){const line=document.createElement('div');line.className='small';line.textContent=r.parents.map(name).join(' + ');details.append(line);}
+          row.append(details);
         }
-        list.appendChild(row);
-        attachPlan(row,recipe.parents);attachReadiness(row,recipes.map(r=>r.parents));
-      } else {
-        // No result ID, animal name, or tier-specific recipe count is exposed in the rendered card.
-        const row=makeRow(parents, 'Possible discovery · result hidden. Mark the animal by name above once you receive it.', null, true);list.appendChild(row);attachPlan(row,recipe.parents);attachReadiness(row,recipes.map(r=>r.parents));
       }
-    }
-    if (!entries.length) list.appendChild(makeRow('No ' + selectedLabel.toLowerCase() + ' animals in Tier ' + targetTier + '.',
-      'Switch the filter or choose another tier. Your discovery progress is saved on this device.', null, false));
-    renderPages(entries.length);
-    updateMarkOptions();
+      if(!ranked.length)list.append(makeRow('No matching animals.','Try another tier or discovery filter.',null,false));
+      renderPages(ranked.length);updateMarkOptions();
+    });
   }
   function *allCombinations(ids, n) {
     if (n === 2) {
@@ -113,27 +139,32 @@
     }
   }
   function renderMissing() {
-    const t = Number(tier.value || 1), ids = tierAnimals(t).map(a => a.id);
-    const known = knownKeys(), tried = new Set(data.tried), wanted = filter.value;
-    const rows = []; let total = 0;
-    for (const parents of allCombinations(ids, parentCount(t))) {
-      const key = comboKey(parents);
-      if (known.has(key)) continue;
-      const isTried = tried.has(key);
-      if (wanted === 'untried' && isTried || wanted === 'tried' && !isTried) continue;
-      if (total >= currentPage*pageSize && total < (currentPage+1)*pageSize) rows.push({parents,key,isTried});
-      total++;
+    const t=Number(tier.value||1),ids=tierAnimals(t).map(a=>a.id);
+    const known=knownKeys(),tried=new Set(data.tried),wanted=filter.value;
+    const entries=[];
+    for(const parents of allCombinations(ids,parentCount(t))){
+      const key=comboKey(parents);if(known.has(key))continue;
+      const isTried=tried.has(key);
+      if((wanted==='untried'&&isTried)||(wanted==='tried'&&!isTried))continue;
+      entries.push({parents,key,isTried});
     }
-    stats.textContent = total + ' undocumented combinations from Tier ' + t + ' parents. These may already be known to other players.';
-    for (const {parents,key,isTried} of rows) {
-      const row = makeRow(parents.map(name).join(' + '), isTried ? 'Marked tried in this browser' : 'No documented result', null, false);
-      const btn = document.createElement('button'); btn.type='button'; btn.className='secondary';
-      btn.textContent = isTried ? 'Mark not tried' : 'Mark tried';
-      btn.addEventListener('click', () => { toggleTried(key); renderDiscover(); });
-      row.appendChild(btn); list.appendChild(row);attachPlan(row,parents);attachReadiness(row,[parents]);
-    }
-    if (!total) list.appendChild(makeRow('No matching undocumented combinations.', 'Try a different tier or filter.', null, false));
-    renderPages(total);
+    const key=rankingKey('missing',[t,wanted]);
+    calculateRanked('missing',key,entries,entry=>({...entry,...evaluateParents(entry.parents),sortName:entry.parents.map(name).join(' + ')}),ranked=>{
+      list.replaceChildren();
+      stats.textContent=ranked.length+' undocumented combinations from Tier '+t+' parents · sorted by missing Tier 1 animals, then preparation merges. Results use your inventory.';
+      currentPage=Math.min(currentPage,Math.max(0,Math.ceil(ranked.length/pageSize)-1));
+      for(const entry of ranked.slice(currentPage*pageSize,(currentPage+1)*pageSize)){
+        const {parents,key,isTried,missing,merges}=entry;
+        const note=(isTried?'Marked tried · ':'')+(Number.isFinite(missing)?'Missing '+missing+' Tier 1 animals · '+merges+' preparation merges':'No complete known path');
+        const row=makeRow(parents.map(name).join(' + '),note,null,false);
+        const btn=document.createElement('button');btn.type='button';btn.className='secondary';
+        btn.textContent=isTried?'Mark not tried':'Mark tried';
+        btn.addEventListener('click',()=>{toggleTried(key);renderDiscover();});
+        row.append(btn);list.append(row);attachPlan(row,parents);
+      }
+      if(!ranked.length)list.append(makeRow('No matching undocumented combinations.','Try another tier or filter.',null,false));
+      renderPages(ranked.length);
+    });
   }
   // On-demand comparison. Work in small batches so large recipe collections do not freeze the page.
   function attachReadiness(row, combinations) {
@@ -230,6 +261,7 @@
     mode.hidden = !admin;
   }
   renderDiscover = function () {
+    ++rankingRun;
     enforceDiscoveryAccess();
     const isPersonal = mode.value === 'animals';
     document.getElementById('discoveryPersonalControls').hidden = !isPersonal;
