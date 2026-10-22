@@ -15,16 +15,27 @@ function dbId(id){return Number(String(id).slice(1))}
 function idOf(n){return 'a'+n}
 async function query(table,method,body,filter){
   if(method==='select'){
-    // Supabase/PostgREST limits rows per request (often 1000).
-    // Fetch every page so recipe counts, discovery status and planners stay accurate.
-    const pageSize=500,all=[];
-    for(let start=0;start<1000000;start+=pageSize){
-      const {data:rows,error}=await api.from(table).select('*').order('id',{ascending:true}).range(start,start+pageSize-1);
-      if(error)throw error;
-      all.push(...(rows||[]));
-      if(!rows||rows.length<pageSize)return all;
+    // Count visible rows first, then fetch small, ordered pages. Never silently
+    // accept a partial encyclopedia if a proxy/server truncates a response.
+    const {count,error:countError}=await api.from(table).select('id',{count:'exact',head:true});
+    if(countError)throw countError;
+    if(!Number.isSafeInteger(count)||count<0)throw new Error('Could not verify the '+table+' record count.');
+    const pageSize=200,all=[];
+    for(let start=0;start<count;start+=pageSize){
+      const end=Math.min(start+pageSize,count)-1;
+      let rows=null,lastError=null;
+      for(let attempt=0;attempt<3;attempt++){
+        const response=await api.from(table).select('*').order('id',{ascending:true}).range(start,end);
+        lastError=response.error;
+        if(!lastError && Array.isArray(response.data) && response.data.length===end-start+1){rows=response.data;break;}
+      }
+      if(!rows)throw new Error('Incomplete '+table+' page at rows '+(start+1)+'–'+(end+1)+'. Expected '+(end-start+1)+' records. '+(lastError?.message||'Server returned fewer rows than requested.')+' Please refresh and try again.');
+      all.push(...rows);
     }
-    throw new Error('Too many records to load safely; please contact the site administrator.');
+    if(all.length!==count||new Set(all.map(row=>row.id)).size!==count){
+      throw new Error('Incomplete '+table+' load: expected '+count+' distinct records, received '+all.length+'.');
+    }
+    return all;
   }
   let q=api.from(table);
   if(method==='insert')q=q.insert(body).select();
