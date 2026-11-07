@@ -17,7 +17,7 @@
   if(!nav||!main)return;
   const btn=document.createElement('button');btn.type='button';btn.dataset.tab='analytics';btn.textContent='Analytics';btn.hidden=true;nav.append(btn);
   const section=document.createElement('section');section.id='analytics';section.hidden=true;
-  section.innerHTML='<div class="panel"><h2>Website Analytics</h2><p class="muted">Private administrator dashboard. Basic cookieless visit counts run automatically unless this device is excluded. Detailed feature analytics require opt-in. Administrators are excluded. Visits are not unique people.</p><div class="fields"><div><label for="analyticsDays">Period</label><select id="analyticsDays"><option value="1">Last 24 hours</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option></select></div></div><p id="analyticsTrackingStatus" class="muted"></p><button id="analyticsRefresh" type="button">Refresh analytics</button><div id="analyticsResults" aria-live="polite" style="margin-top:14px"></div></div>';
+  section.innerHTML='<div class="panel"><h2>Website Analytics</h2><p class="muted">Private administrator dashboard. Basic cookieless visit counts run automatically unless this device is excluded. Detailed feature analytics require opt-in. Administrators are excluded. Visits are not unique people.</p><div class="fields"><div><label for="analyticsDays">Period</label><select id="analyticsDays"><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="0" selected>All time (since tracking began)</option></select></div></div><p id="analyticsTrackingStatus" class="muted"></p><button id="analyticsRefresh" type="button">Refresh analytics</button><div id="analyticsResults" aria-live="polite" style="margin-top:14px"></div></div>';
   main.append(section);
   const privacy=document.createElement('div');privacy.className='panel';privacy.id='analyticsPrivacy';
   privacy.innerHTML='<h2>Privacy &amp; Analytics</h2><p class="muted">Basic cookieless visit counts are collected automatically unless you exclude this device. Each counted visit includes general device category and referral category (Reddit, direct, or other). Optional feature analytics record general tab and button usage only if you enable them. This tracker does not store IP addresses, names, email addresses, precise locations, persistent visitor IDs, inventory contents, or individual breeding choices in its analytics table. Hosting and infrastructure providers may process technical request data separately. Administrators and excluded devices are not counted. You can change your choices anytime. Turning tracking off does not delete previously recorded aggregate events.</p><label><input id="analyticsConsent" type="checkbox" class="check"> Share optional feature-usage analytics</label><label><input id="analyticsExcludeDevice" type="checkbox" class="check"> Exclude this device from analytics (even while signed out)</label><p class="muted" id="analyticsConsentStatus"></p>';
@@ -187,10 +187,15 @@ async function refreshExtra(){
   out.textContent='Loading…';
   try{
     const days=Number(document.getElementById('analyticsDays').value);
-    const {data:stats,error}=await api.rpc('petlings_analytics_extra_summary',{p_days:days});
+    let {data:stats,error}=await api.rpc('petlings_analytics_extra_summary',{p_days:days});
+    let limited=false;
+    if(error && days===0){
+      const fallback=await api.rpc('petlings_analytics_extra_summary',{p_days:30});
+      if(!fallback.error){stats=fallback.data;error=null;limited=true;}
+    }
     if(error)throw error;
     const yes=Number(stats.consent_accepted||0),no=Number(stats.consent_basic_only||0),total=yes+no;
-    out.innerHTML='<div class="fields"><div><strong>Choices recorded</strong><h2>'+total.toLocaleString()+'</h2></div><div><strong>Accepted</strong><h2>'+yes.toLocaleString()+'</h2></div><div><strong>Basic only</strong><h2>'+no.toLocaleString()+'</h2></div><div><strong>Acceptance rate</strong><h2>'+(total?Math.round(yes/total*100)+'%':'—')+'</h2></div></div><p><strong>Survey responses:</strong> '+Number(stats.survey_responses||0).toLocaleString()+'</p>'+list('Age ranges (voluntary)',stats.by_age)+list('Regions (voluntary)',stats.by_region);
+    out.innerHTML=(limited?'<p class="muted"><strong>Consent and survey totals shown for the last 30 days only.</strong> The extra-summary database function needs an All Time update.</p>':'')+'<div class="fields"><div><strong>Choices recorded</strong><h2>'+total.toLocaleString()+'</h2></div><div><strong>Accepted</strong><h2>'+yes.toLocaleString()+'</h2></div><div><strong>Basic only</strong><h2>'+no.toLocaleString()+'</h2></div><div><strong>Acceptance rate</strong><h2>'+(total?Math.round(yes/total*100)+'%':'—')+'</h2></div></div><p><strong>Survey responses:</strong> '+Number(stats.survey_responses||0).toLocaleString()+'</p>'+list('Age ranges (voluntary)',stats.by_age)+list('Regions (voluntary)',stats.by_region);
   }catch(e){out.textContent='Additional analytics unavailable: '+e.message}
 }
 document.querySelector('#tabs button[data-tab="analytics"]')?.addEventListener('click',refreshExtra);
