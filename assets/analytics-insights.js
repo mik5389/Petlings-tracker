@@ -19,11 +19,13 @@
   running=true;out.textContent='Loading aggregate insights…';
   try{
    const days=Number(document.getElementById('analyticsDays')?.value||7);
-   const periods=[1,7,30];
+   const periods=[0,1,7,30];
    const responses=await Promise.all(periods.map(p=>api.rpc('petlings_analytics_summary',{p_days:p})));
    for(const r of responses)if(r.error)throw r.error;
    if(typeof isAdmin==='undefined'||isAdmin!==true){out.textContent='Administrator access required.';return;}
-   const stats=responses[periods.indexOf(days)].data||{};
+   const selected=responses[periods.indexOf(days)];
+    if(!selected)throw new Error('Unsupported analytics period: '+days);
+    const stats=selected.data||{};
    const visits=Number(stats.visits||0),sources=stats.by_source||{},devices=stats.by_device||{},features=stats.by_feature||{};
    const interactions=Object.values(features).reduce((a,b)=>a+Number(b||0),0);
    const all=responses.map((r,i)=>[periods[i]+' day'+(periods[i]>1?'s':''),Number(r.data?.visits||0)]);
