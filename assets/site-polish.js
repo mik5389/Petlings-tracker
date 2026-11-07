@@ -14,6 +14,8 @@
     window.scrollTo({top:0,behavior:'auto'});
   }
   aboutTab.addEventListener('click',()=>openTab('about'));
+  // Default to About on each new page load; user navigation remains unchanged.
+  openTab('about');
   about.querySelectorAll('[data-about-go]').forEach(button=>button.addEventListener('click',()=>openTab(button.dataset.aboutGo)));
   // Replace visible UI terminology, including messages inserted after calculations.
   // Skip code, user inputs, and text being edited by players.
