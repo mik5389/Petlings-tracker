@@ -12,15 +12,29 @@ let enabled=false, revision=0, busy=false, dirty=false, timer=null, userId=null,
 const key='petlings-cloud-sync-enabled-v1';
 const fingerprintKey='petlings-cloud-sync-fingerprint-v1';
 const fingerprint=()=>JSON.stringify(localSnapshot());
-const localSnapshot=()=>({inventory:{...data.inventory},tried:[...data.tried],discovered:Object.fromEntries(data.animals.map(a=>[a.id,!!a.discovered]))});
+function localSnapshot(){
+  window.PetlingsFarms?.saveCurrent();
+  const read=k=>{try{return JSON.parse(localStorage.getItem(k)||'null')}catch(_){return null}};
+  const main=read('petlings-personal-v2')||{inventory:{},tried:[],discovered:{}};
+  const sea=read('petlings-personal-sea-v1')||{inventory:{},tried:[],discovered:{}};
+  // Preserve the legacy root fields for older clients; new clients use farms.
+  return {...main,farms:{main,sea}};
+}
 function applySnapshot(p){
-  if(!p||typeof p!=='object'||!p.inventory||typeof p.inventory!=='object'||!Array.isArray(p.tried)||!p.discovered||typeof p.discovered!=='object')throw Error('Cloud progress is invalid.');
+  if(!p||typeof p!=='object')throw Error('Cloud progress is invalid.');
+  const valid=x=>x&&typeof x.inventory==='object'&&Array.isArray(x.tried)&&typeof x.discovered==='object';
+  const main=p.farms?.main||p;
+  const sea=p.farms?.sea||(()=>{try{return JSON.parse(localStorage.getItem('petlings-personal-sea-v1'))}catch(_){return null}})()||{inventory:{},tried:[],discovered:{}};
+  if(!valid(main)||!valid(sea))throw Error('Cloud progress is invalid.');
   paused=true;
   try{
-    data.inventory=Object.fromEntries(data.animals.map(a=>[a.id,Math.max(0,Math.floor(Number(p.inventory[a.id])||0))]));
-    data.tried=p.tried.filter(x=>typeof x==='string');
-    data.animals.forEach(a=>a.discovered=p.discovered[a.id]===true);
-    originalPersonalSave();renderAll();
+    localStorage.setItem('petlings-personal-v2',JSON.stringify(main));
+    localStorage.setItem('petlings-personal-sea-v1',JSON.stringify(sea));
+    const current=window.PetlingsFarms?.current==='sea'?sea:main;
+    data.inventory=Object.fromEntries(data.animals.map(a=>[a.id,Math.max(0,Math.floor(Number(current.inventory[a.id])||0))]));
+    data.tried=current.tried.filter(x=>typeof x==='string');
+    data.animals.forEach(a=>a.discovered=current.discovered[a.id]===true);
+    renderAll();
   }finally{paused=false}
 }
 function status(message){$sync('syncStatus').textContent=message}
@@ -52,6 +66,7 @@ async function flush(){
   }catch(e){dirty=true;status('Not synced: '+e.message)}
   finally{busy=false;if(dirty&&enabled)status('Unsynced changes on this device. Use Check for updates to resolve or retry.');}
 }
+document.addEventListener('petlings:farm-changed',()=>{if(enabled){dirty=true;queue()}});
 function queue(){if(!enabled||paused)return;dirty=true;status('Saving changes…');clearTimeout(timer);timer=setTimeout(flush,900)}
 const originalPersonalSave=personalSave;
 personalSave=function(){originalPersonalSave();queue()};

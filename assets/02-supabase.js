@@ -3,10 +3,17 @@
 const api=window.supabase?.createClient('https://cgsqwrptzxtvjdhogtzk.supabase.co','sb_publishable_k92vjnQMPWHgMsNr_6k5jw_-Jff4m8X');
 let isAdmin=false,remoteReady=false;
 const personalKey='petlings-personal-v2';
+const seaKey='petlings-personal-sea-v1';
+let activeFarm=localStorage.getItem('petlings-active-farm-v1')==='sea'?'sea':'main';
+let changingFarm=false;
+function farmPersonalKey(){return activeFarm==='sea'?seaKey:personalKey}
+function farmProgress(){return {inventory:{...data.inventory},tried:[...data.tried],discovered:Object.fromEntries(data.animals.map(a=>[a.id,!!a.discovered]))}}
+function saveCurrentFarm(){localStorage.setItem(farmPersonalKey(),JSON.stringify(farmProgress()))}
+
 const banner=document.createElement('div');banner.className='panel';banner.id='sharedStatus';banner.textContent='Connecting to shared encyclopedia…';document.querySelector('main').insertBefore(banner,document.querySelector('main nav'));
 const adminArea=document.createElement('div');adminArea.className='panel';adminArea.innerHTML='<strong>Shared encyclopedia</strong><p id="accountStatus" class="muted">Checking your account…</p><button id="signIn" class="secondary">Sign in with GitHub</button> <button id="signOut" class="secondary" hidden>Sign out</button> <button id="refreshShared" class="secondary">Refresh shared recipes</button>';
 document.querySelector('main').insertBefore(adminArea,document.querySelector('main nav'));
-function personalSave(){localStorage.setItem(personalKey,JSON.stringify({inventory:data.inventory,tried:data.tried,discovered:Object.fromEntries(data.animals.map(a=>[a.id,a.discovered]))}));}
+function personalSave(){if(!changingFarm)saveCurrentFarm()}
 // Existing local data remains available as a backup; shared data is authoritative.
 const oldSave=save;
 save=function(){personalSave();renderAll()};
@@ -46,9 +53,11 @@ async function query(table,method,body,filter){
   return rows;
 }
 async function loadShared(){if(!api){banner.textContent='Could not load database library. Check your internet connection.';return}banner.textContent='Loading shared animals and recipes…';try{
-const [animals,recipes]=await Promise.all([query('animals','select'),query('recipes','select')]);
-const savedPersonal=JSON.parse(localStorage.getItem(personalKey)||'null');
-const oldAnimals=data.animals,oldInventory=data.inventory,oldTried=data.tried;
+const [allAnimals,allRecipes]=await Promise.all([query('animals','select'),query('recipes','select')]);
+const animals=allAnimals.filter(a=>(a.farm||'main')===activeFarm);
+const recipes=allRecipes.filter(r=>(r.farm||'main')===activeFarm);
+const savedPersonal=JSON.parse(localStorage.getItem(farmPersonalKey())||'null');
+const oldAnimals=changingFarm?[]:data.animals,oldInventory=changingFarm?{}:data.inventory,oldTried=changingFarm?[]:data.tried;
 const mapOld=new Map(oldAnimals.map(a=>[a.name.toLowerCase()+'|'+a.tier,a]));
 const newAnimals=animals.map(a=>{const old=mapOld.get(a.name.toLowerCase()+'|'+a.tier);return {id:idOf(a.id),name:a.name,tier:a.tier,discovered:savedPersonal?.discovered?.[idOf(a.id)]??old?.discovered??false}});
 const remap={};for(let a of newAnimals){let old=mapOld.get(a.name.toLowerCase()+'|'+a.tier);if(old)remap[old.id]=a.id}
@@ -60,11 +69,11 @@ async function refreshAuth(){if(!api)return;try{const {data:session}=await api.a
 $('signIn').onclick=async()=>{const {error}=await api.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});if(error)toast(error.message)};
 $('signOut').onclick=async()=>{await api.auth.signOut();await refreshAuth()};
 $('refreshShared').onclick=loadShared;
-addAnimal=async function(){if(!mustAdmin())return;let n=$('animalName').value.trim(),t=Number($('animalTier').value);if(!n)return toast('Enter an animal name');if(data.animals.some(a=>a.name.toLowerCase()===n.toLowerCase()))return toast('Animal already exists');try{await query('animals','insert',{name:n,tier:t});$('animalName').value='';await loadShared();$('animalName').focus();toast('Shared animal saved!')}catch(e){toast('Save failed: '+e.message)}};
+addAnimal=async function(){if(!mustAdmin())return;let n=$('animalName').value.trim(),t=Number($('animalTier').value);if(!n)return toast('Enter an animal name');if(data.animals.some(a=>a.name.toLowerCase()===n.toLowerCase()))return toast('Animal already exists');try{await query('animals','insert',{name:n,tier:t,farm:activeFarm});$('animalName').value='';await loadShared();$('animalName').focus();toast('Shared animal saved!')}catch(e){toast('Save failed: '+e.message)}};
 removeAnimal=async function(id){if(!mustAdmin())return;if(!confirm('Delete this shared animal? It may fail if recipes still use it.'))return;try{await query('animals','delete',null,dbId(id));await loadShared()}catch(e){toast('Delete failed: '+e.message)}};
-addRecipe=async function(){if(!mustAdmin())return;const result=$('recipeResult').value,parents=[...document.querySelectorAll('.parent')].map(x=>x.value);const err=validateRemoteRecipe(result,parents);if(err)return toast(err);try{await query('recipes','insert',{result_id:dbId(result),parent_ids:sortIds(parents).map(dbId)});await loadShared();toast('Shared recipe saved!')}catch(e){toast('Save failed: '+e.message)}};
+addRecipe=async function(){if(!mustAdmin())return;const result=$('recipeResult').value,parents=[...document.querySelectorAll('.parent')].map(x=>x.value);const err=validateRemoteRecipe(result,parents);if(err)return toast(err);try{await query('recipes','insert',{result_id:dbId(result),parent_ids:sortIds(parents).map(dbId),farm:activeFarm});await loadShared();toast('Shared recipe saved!')}catch(e){toast('Save failed: '+e.message)}};
 function validateRemoteRecipe(result,parents){let a=animal(result);if(!a||a.tier<2)return 'Choose a result animal';if(parents.length!==(a.tier>=8?3:2)||parents.some(p=>animal(p)?.tier!==a.tier-1))return 'Select parents from the tier below';let existing=data.recipes.find(r=>comboKey(r.parents)===comboKey(parents));if(existing)return 'Already known: '+name(existing.result);return null}
-bulkAdd=async function(){if(!mustAdmin())return;const result=$('bulkResult').value,lines=$('bulkText').value.split('\n').filter(x=>x.trim());const rows=[],errors=[];for(let i=0;i<lines.length;i++){let parts=lines[i].split('+').map(x=>x.trim());let parents=parts.map(n=>data.animals.find(a=>a.name.toLowerCase()===n.toLowerCase())?.id);let err=validateRemoteRecipe(result,parents);if(err)errors.push(`Line ${i+1}: ${err}`);else rows.push({result_id:dbId(result),parent_ids:sortIds(parents).map(dbId)})}if(errors.length){alert(errors.join('\n'));return}if(!rows.length)return toast('Enter recipes first');try{await query('recipes','insert',rows);$('bulkText').value='';await loadShared();toast(rows.length+' shared recipes saved!')}catch(e){toast('Import failed: '+e.message)}};
+bulkAdd=async function(){if(!mustAdmin())return;const result=$('bulkResult').value,lines=$('bulkText').value.split('\n').filter(x=>x.trim());const rows=[],errors=[];for(let i=0;i<lines.length;i++){let parts=lines[i].split('+').map(x=>x.trim());let parents=parts.map(n=>data.animals.find(a=>a.name.toLowerCase()===n.toLowerCase())?.id);let err=validateRemoteRecipe(result,parents);if(err)errors.push(`Line ${i+1}: ${err}`);else rows.push({result_id:dbId(result),parent_ids:sortIds(parents).map(dbId),farm:activeFarm})}if(errors.length){alert(errors.join('\n'));return}if(!rows.length)return toast('Enter recipes first');try{await query('recipes','insert',rows);$('bulkText').value='';await loadShared();toast(rows.length+' shared recipes saved!')}catch(e){toast('Import failed: '+e.message)}};
 removeRecipe=async function(i){if(!mustAdmin())return;let r=data.recipes[i];if(!r||!confirm('Remove this recipe from the shared encyclopedia?'))return;try{await query('recipes','delete',null,r.dbid);await loadShared()}catch(e){toast('Delete failed: '+e.message)}};
 // Submit a new animal with Enter while the name field is focused.
 // Reuse the existing admin-checked, Supabase-backed addAnimal handler.
@@ -92,3 +101,18 @@ $('backup').querySelector('.muted').textContent='Download a copy of your persona
 $('backup').querySelector('label[style]').style.display='none';
 $('backup').querySelector('.danger').textContent='Erase my personal inventory and progress';
 refreshAuth().then(loadShared);
+
+// Farm switching uses one shared encyclopedia and independent personal state.
+async function petlingsSwitchFarm(next){
+ if(next!=='main'&&next!=='sea'||next===activeFarm)return;
+ if(!remoteReady){toast('Wait for the encyclopedia to load.');return}
+ saveCurrentFarm();
+ changingFarm=true;activeFarm=next;localStorage.setItem('petlings-active-farm-v1',next);
+ try{
+   data={animals:[],recipes:[],inventory:{},tried:[]};
+   await loadShared();
+   if(!remoteReady)throw Error('Farm data could not load.');
+   document.dispatchEvent(new CustomEvent('petlings:farm-changed',{detail:{farm:next}}));
+ }catch(e){toast('Could not switch farm: '+e.message)}finally{changingFarm=false}
+}
+window.PetlingsFarms={get current(){return activeFarm},switchTo:petlingsSwitchFarm,saveCurrent:saveCurrentFarm};
