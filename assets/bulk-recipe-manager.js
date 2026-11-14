@@ -16,7 +16,7 @@ const source=el('brmSource'),target=el('brmTarget'),action=el('brmAction'),rows=
 const selected=new Set();let busy=false;let previousFarm=null;let previousSignature='';
 function farm(){return window.PetlingsFarms?.current||'main'}
 function validId(r){return Number.isSafeInteger(Number(r.dbid))&&Number(r.dbid)>0}
-function entries(){return data.recipes.filter(r=>r.result===source.value&&validId(r))}
+function entries(){return data.recipes.filter(r=>r.result===source.value&&validId(r)).sort((a,b)=>a.parents.map(name).join(' + ').localeCompare(b.parents.map(name).join(' + ')))}
 function refreshRows(){
  const items=entries();const ids=new Set(items.map(r=>Number(r.dbid)));
  for(const id of selected)if(!ids.has(id))selected.delete(id);
